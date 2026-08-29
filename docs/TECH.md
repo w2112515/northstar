@@ -65,12 +65,12 @@ flowchart TB
 **D2 · 执行走 alpaca-py，MCP 承担数据面与运维台；执行器为 adapter。**
 赛规字面是"使用 Trading API + MCP Server 或 CLI"——我们同时使用 Trading API（执行）与 MCP Server（LLM 数据工具+运维），满足要件。若组委严格解释为"执行必须经 MCP/CLI"，`Executor` 是接口，切换 `McpExecutor`/`CliExecutor` 实现即可（预算 1 天内）。
 
-**D3 · 回测双轨（诚实边界）。**
-股票策略：vectorbt 全历史（IEX 日线，多年）。
+**D3 · 回测双轨（诚实边界）。**（2026-08-30 修正：不用 vectorbt，改 **pandas/numpy 纯向量回测**——numba 对新 Python 的兼容风险不值得在窗口期内赌；日线简单规则百行内更确定。）
+股票策略：pandas 向量回测全历史（IEX 日线，4 年，5bps 成本，walk-forward OOS 决策）。
 期权策略：**Alpaca 期权历史数据自 2024-02 起**（[官方文档](https://docs.alpaca.markets/us/docs/historical-option-data)，indicative 源，免费档延迟 15 分钟）——2024-02 之后用真实数据回测；更早期间用标的 OHLC + Black-Scholes 近似估权利金（到期 payoff 精确、中途 mark 近似、IV 用常数或 VIX 代理），**所有近似在报告中显式标注**。EOD 策略对 15 分钟延迟不敏感（声明）。
 
-**D4 · 三个 ADK 图。**
-TradingLoop（事件→分流→信号→编译→闸门→执行→记账）；EvolutionLoop（提议→回测→评分→试运行→晋级 HITL）；DailyDigest（收盘→日报）。确定性步骤=function 节点，LLM 步骤=agent 节点，审批=原生 HITL 断点。这正是 Google 赛道"deterministic checks + reasoning + approvals"的标准叙事。
+**D4 · ADK 图（实现现状，2026-08-30）。**
+**TradingLoop = ADK 2.8 `Workflow` 七节点图**（perceive → prefilter → triage[Flash] → signals → compile_gate_execute → explain[Flash] → record），确定性步骤=function 节点，LLM 步骤在节点内调 google-genai 并带诚实降级（无 key 时 journal 标 `llm:false`）。人话日报由 explain 节点承担（原 DailyDigest 图并入）。EvolutionLoop 当前为确定性服务（提议→walk-forward→评分→审批），HITL 用产品自身的审批卡（超时=拒绝）而非阻塞式 workflow 断点——调度循环不能被人挂起 12 小时。若时间允许可把 Evolution 也包成第二个 ADK 图（叙事增强，非功能必需）。
 
 **D5 · 单容器 modular monolith + Firestore。**
 黑客松不拆微服务；进程内异步队列代替 Pub/Sub（接口留好，需要凑 GCP 服务清单时可加）。
@@ -124,7 +124,7 @@ TradingLoop（事件→分流→信号→编译→闸门→执行→记账）；
 
 由目标推导（per-Goal 护栏）：单笔最大定义亏损 ≤ 风险档系数 × 净值（初版保守档 0.5%、平衡 1%、进取 2%——**待校准假设**）；组合回撤断路器（软 −8% 警示 / 硬 −12% 全停，待校准）；单标的集中度 ≤ 20%；最大同时持仓数。
 订单级：必须可计算 max_loss，否则拒绝；仅限价单；流动性门槛（OI、价差宽度）；幂等键防重复。
-行为级：连亏 3 笔冷却 24h；财报/FOMC 黑名单窗口；开收盘前后 10 分钟不开新仓；审批超时=拒绝；kill switch（文件/开关，人工复位）。
+行为级：连亏 3 笔冷却（needs_human）；审批超时=拒绝；kill switch（开关+KILL 文件，人工复位）。（已实现 13 条规则见 `northstar/gate/rules.py` + 16 个单测；财报/FOMC 黑名单窗口与开收盘 10 分钟禁开仓推迟到 A 里程碑。）
 期权编译器硬约束（来自 Alpaca L3 规则）：mleg 不含股票腿；同一 mleg 单内短腿必须被覆盖（roll 需拆单）；被指派监控靠 **REST 轮询 NTA**（不走 websocket；paper 的 NTA 次日可见——短腿 ITM 主动预警补位）。
 
 ## 5. 数据与密钥
@@ -135,23 +135,36 @@ TradingLoop（事件→分流→信号→编译→闸门→执行→记账）；
 
 ## 6. Repo 结构
 
+（2026-08-30 修正：Windows 开发环境下不做 uv workspace 多包，"packages" 落为单 Python 包内的模块——同样的边界，更少的接线故障面。）
+
 ```
 hks30/
 ├─ apps/
-│  ├─ web/            # Next.js 前端
-│  └─ api/            # FastAPI + ADK 图（TradingLoop / EvolutionLoop / DailyDigest）
-├─ packages/
-│  ├─ strategies/     # 14 个确定性策略 + AI 研判策略
-│  ├─ backtest/       # vectorbt 封装 + 期权近似回测 + walk-forward
-│  ├─ gate/           # 风控闸门（纯函数，100% 分支单测目标）
-│  ├─ compiler/       # 期权策略编译器（白名单→合约选择）
-│  ├─ executor/       # Executor 接口 + AlpacaPy/Mcp/Cli 三实现
-│  └─ evolution/      # 提议/评分/晋级门
-├─ docs/              # PRODUCT / DESIGN / TECH / ROADMAP（活事实）
-└─ infra/             # Dockerfile、cloudbuild、部署脚本
+│  ├─ web/               # Next.js 16 前端（Night Voyage UI）+ Dockerfile
+│  │  └─ src/app/        # / 驾驶舱、/onboarding、/strategies、/lab、/journal
+│  └─ api/               # Python 3.12 (uv) + Dockerfile
+│     ├─ northstar/
+│     │  ├─ domain.py    # 全部领域契约（pydantic）
+│     │  ├─ config.py    # .env / paper-only 硬约束
+│     │  ├─ broker.py    # alpaca-py 客户端与读取
+│     │  ├─ engine.py    # 组合式交易 pass（人工触发与 ADK 共用）
+│     │  ├─ llm.py       # Gemini 封装（无 key 诚实降级）
+│     │  ├─ strategies/  # 目录 + wheel/momentum 程序
+│     │  ├─ backtest/    # pandas 向量回测 + walk-forward + Monte Carlo
+│     │  ├─ gate/        # 风控闸门（纯函数，16 单测）
+│     │  ├─ compiler/    # 期权/股票编译器（delta/DTE/流动性）
+│     │  ├─ executor/    # 限价单生命周期（提交/轮询/超时撤单）
+│     │  ├─ evolution/   # 提议/回测/评分/晋级
+│     │  ├─ goalplanner/ # 目标→计划翻译器
+│     │  ├─ adkflows/    # ADK Workflow：TradingLoop 七节点图
+│     │  ├─ journal/     # Store 接口 + LocalJson / Firestore 实现
+│     │  └─ api/         # FastAPI 路由（engine/goal/loop/lab）
+│     └─ tests/          # gate/compiler/copy-lint
+├─ docs/                 # PRODUCT / DESIGN / TECH / ROADMAP（活事实）
+└─ scripts/              # dev.ps1 / smoke.ps1 / deploy.ps1（Cloud Run ×2）
 ```
 
-运行入口：`make dev`（web + api 双进程）；`make deploy`（gcloud run deploy ×2）；`make backtest STRATEGY=...`；`make demo-seed`（演示数据种子，仅标注为演示的只读视图使用）。
+运行入口：`scripts\dev.ps1`（API :8800 + Web :3000）；`scripts\smoke.ps1`；`scripts\deploy.ps1 -ProjectId ...`（先 API 后 Web，Web 以运行时 `API_BASE` 环境变量指向 API 服务）。
 
 ## 7. 观测与验证
 
