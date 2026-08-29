@@ -174,6 +174,7 @@ def monte_carlo_goal(
         "probability": float((finals >= target_amount).mean()),
         "median_final": float(np.median(finals)),
         "p10_final": float(np.percentile(finals, 10)),
+        "p40_final": float(np.percentile(finals, 40)),
         "p90_final": float(np.percentile(finals, 90)),
         "median_max_dd": float(np.median(max_dd_paths)),
         "band_p10": pct(10),
