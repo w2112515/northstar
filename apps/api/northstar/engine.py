@@ -142,34 +142,23 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
 
 # --------------------------------------------------------------------------- main pass
 
-def run_once(dry_run: bool = False, execute_wait: int = 90) -> dict[str, Any]:
-    store = get_store()
-    settings = get_settings()
-    ctx, snap, clock = build_context_and_snapshot(store)
-
-    plan = ctx.plan
-    guardrails = plan.guardrails if plan else DEFAULT_GUARDRAILS
-    weights = (
-        {a.strategy_id: a.weight for a in plan.allocations} if plan else None
-    )
-
+def load_instances_and_bars(store, ctx: EngineContext) -> list[StrategyInstance]:
+    """Active strategy instances + the daily bars their programs need."""
     instances = [i for i in ensure_default_instances(store) if i.enabled and i.status in ("champion", "trial")]
-
-    # bars for equity programs + wheel affordability checks
     bar_symbols: list[str] = []
     for inst in instances:
         bar_symbols += inst.params.get("universe", [])
         bar_symbols += inst.params.get("underlyings", [])
     ctx.bars = daily_bars(sorted(set(bar_symbols)), years=1.2) if bar_symbols else {}
+    return instances
 
-    summary: dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "dry_run": dry_run,
-        "market_open": clock["is_open"],
-        "mode": "plan" if plan else "dev-default",
-        "proposals": [], "rejected": [], "executed": [], "needs_human": [], "compile_failed": [],
-    }
 
+def collect_proposals(
+    store, ctx: EngineContext, instances: list[StrategyInstance]
+) -> list[tuple[StrategyInstance, TradeProposal]]:
+    """Run strategy programs, journal every proposal."""
+    weights = {a.strategy_id: a.weight for a in ctx.plan.allocations} if ctx.plan else None
+    out: list[tuple[StrategyInstance, TradeProposal]] = []
     for inst in instances:
         program = PROGRAMS.get(inst.family)
         if program is None:
@@ -182,74 +171,116 @@ def run_once(dry_run: bool = False, execute_wait: int = 90) -> dict[str, Any]:
             state = store.get("instance_state", inst.id) or {}
             if not momentum_prog.should_rebalance(state, int(inst.params.get("rebalance_days", 5))):
                 continue
-
         for proposal in program(inst, weight, ctx):
-            summary["proposals"].append(proposal.id)
             store.append_event(
                 JournalEvent(
                     kind="proposal", human=proposal.thesis_human,
                     payload=proposal.model_dump(), refs={"proposal_id": proposal.id},
                 )
             )
-            try:
-                order = compile_proposal(proposal)
-            except CompileError as e:
-                summary["compile_failed"].append({"proposal_id": proposal.id, "reason": str(e)})
-                store.append_event(
-                    JournalEvent(
-                        kind="verdict",
-                        human=f"No trade: {e}",
-                        payload={"verdict": "rejected", "reason_codes": ["COMPILE_FAILED"], "detail": str(e)},
-                        refs={"proposal_id": proposal.id},
-                    )
-                )
-                continue
+            out.append((inst, proposal))
+    return out
 
-            verdict = run_gate(order, proposal, snap, guardrails)
-            store.append_event(_verdict_event(verdict, order))
 
-            if verdict.verdict == "approved":
-                if dry_run:
-                    summary["executed"].append({"order_plan": order.model_dump(), "dry_run": True})
-                else:
-                    result = execute_order_plan(order, market_open=clock["is_open"], wait_seconds=execute_wait)
-                    summary["executed"].append(result)
-                    if inst.family == "momentum_rotation":
-                        store.save("instance_state", inst.id,
-                                   {"last_rebalance": datetime.now(timezone.utc).isoformat()})
-            elif verdict.verdict == "needs_human":
-                approval = {
-                    "id": verdict.id,
-                    "created_at": verdict.created_at,
-                    "proposal": proposal.model_dump(),
-                    "order_plan": order.model_dump(),
-                    "verdict": verdict.model_dump(),
-                    "status": "pending",
-                    "expires_hours": guardrails.approval_timeout_hours,
-                }
-                store.save("approvals", verdict.id, approval)
-                summary["needs_human"].append(verdict.id)
-                store.append_event(
-                    JournalEvent(
-                        kind="approval",
-                        human=f"Needs your call: {order.human} Reasons: {', '.join(verdict.reason_codes)}.",
-                        payload=approval, refs={"proposal_id": proposal.id, "verdict_id": verdict.id},
-                    )
-                )
-            else:
-                summary["rejected"].append({"proposal_id": proposal.id, "codes": verdict.reason_codes})
+def process_proposal(
+    store,
+    inst: StrategyInstance,
+    proposal: TradeProposal,
+    snap: GateSnapshot,
+    guardrails: Guardrails,
+    market_open: bool,
+    dry_run: bool,
+    execute_wait: int,
+    summary: dict[str, Any],
+) -> None:
+    """compile -> gate -> execute/approval, all journaled. The only money path."""
+    try:
+        order = compile_proposal(proposal)
+    except CompileError as e:
+        summary["compile_failed"].append({"proposal_id": proposal.id, "reason": str(e)})
+        store.append_event(
+            JournalEvent(
+                kind="verdict", human=f"No trade: {e}",
+                payload={"verdict": "rejected", "reason_codes": ["COMPILE_FAILED"], "detail": str(e)},
+                refs={"proposal_id": proposal.id},
+            )
+        )
+        return
 
+    verdict = run_gate(order, proposal, snap, guardrails)
+    store.append_event(_verdict_event(verdict, order))
+
+    if verdict.verdict == "approved":
+        if dry_run:
+            summary["executed"].append({"order_plan": order.model_dump(), "dry_run": True})
+        else:
+            result = execute_order_plan(order, market_open=market_open, wait_seconds=execute_wait)
+            summary["executed"].append(result)
+            if inst.family == "momentum_rotation":
+                store.save("instance_state", inst.id,
+                           {"last_rebalance": datetime.now(timezone.utc).isoformat()})
+    elif verdict.verdict == "needs_human":
+        approval = {
+            "id": verdict.id,
+            "created_at": verdict.created_at,
+            "proposal": proposal.model_dump(),
+            "order_plan": order.model_dump(),
+            "verdict": verdict.model_dump(),
+            "status": "pending",
+            "expires_hours": guardrails.approval_timeout_hours,
+        }
+        store.save("approvals", verdict.id, approval)
+        summary["needs_human"].append(verdict.id)
+        store.append_event(
+            JournalEvent(
+                kind="approval",
+                human=f"Needs your call: {order.human} Reasons: {', '.join(verdict.reason_codes)}.",
+                payload=approval, refs={"proposal_id": proposal.id, "verdict_id": verdict.id},
+            )
+        )
+    else:
+        summary["rejected"].append({"proposal_id": proposal.id, "codes": verdict.reason_codes})
+
+
+def new_summary(dry_run: bool, market_open: bool, mode: str) -> dict[str, Any]:
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "dry_run": dry_run,
+        "market_open": market_open,
+        "mode": mode,
+        "proposals": [], "rejected": [], "executed": [], "needs_human": [], "compile_failed": [],
+    }
+
+
+def journal_pass_summary(store, summary: dict[str, Any]) -> None:
     store.append_event(
         JournalEvent(
             kind="system",
             human=(
-                f"Loop pass done ({summary['mode']}, {'dry-run' if dry_run else 'live paper'}): "
+                f"Loop pass done ({summary['mode']}, {'dry-run' if summary['dry_run'] else 'live paper'}): "
                 f"{len(summary['proposals'])} proposals, {len(summary['executed'])} executed, "
                 f"{len(summary['needs_human'])} awaiting you, {len(summary['rejected'])} blocked."
             ),
             payload={k: v for k, v in summary.items() if k != "proposals"},
         )
     )
+
+
+def run_once(dry_run: bool = False, execute_wait: int = 90) -> dict[str, Any]:
+    """One deterministic pass (manual trigger / fallback path without ADK)."""
+    store = get_store()
+    ctx, snap, clock = build_context_and_snapshot(store)
+    guardrails = ctx.plan.guardrails if ctx.plan else DEFAULT_GUARDRAILS
+
+    instances = load_instances_and_bars(store, ctx)
+    summary = new_summary(dry_run, clock["is_open"], "plan" if ctx.plan else "dev-default")
+
+    for inst, proposal in collect_proposals(store, ctx, instances):
+        summary["proposals"].append(proposal.id)
+        process_proposal(store, inst, proposal, snap, guardrails,
+                         clock["is_open"], dry_run, execute_wait, summary)
+
+    journal_pass_summary(store, summary)
     return summary
 
 
