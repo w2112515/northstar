@@ -1,0 +1,30 @@
+[project]
+name = "northstar"
+version = "0.1.0"
+description = "NorthStar - goal-first, self-evolving, hard-gated autonomous trading copilot (paper only)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "python-dotenv>=1.0",
+    "alpaca-py>=0.33",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "httpx>=0.27",
+    "google-adk>=2.0",
+    "google-genai>=1.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["northstar"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
