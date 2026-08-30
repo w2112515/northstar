@@ -8,31 +8,33 @@
  *  Tailwind token classes instead of this file. */
 
 export const CHART = {
-  // the one interactive accent (token --indigo)
-  indigo: "#8aa2ff",
-  indigoSoft: "rgba(138,162,255,0.45)",
+  // the one interactive accent (token --indigo, prototype "signal")
+  indigo: "#5b8def",
+  indigoSoft: "rgba(91,141,239,0.45)",
   // star moments only: the target, the voyage line, AI narration (token --star)
   star: "#f5c542",
   starSoft: "rgba(245,197,66,0.5)",
+  // deterministic code / CODE tags (token --teal)
+  teal: "#35d0ba",
   // Monte Carlo cone: ink at low alpha on the night plate
-  cone: "rgba(232,237,246,0.10)",
-  median: "#9aa7c0",
+  cone: "rgba(231,238,249,0.10)",
+  median: "#a2b3d1",
   // verified / money in (token --green)
   green: "#4caf8e",
   greenFill: "rgba(76,175,142,0.28)",
-  // rejected / money out (token --red)
-  red: "#e0655f",
-  redFill: "rgba(224,101,95,0.24)",
+  // rejected / money out (token --red, prototype "coral")
+  red: "#ff6b6b",
+  redFill: "rgba(255,107,107,0.22)",
   // waiting on a human (token --amber)
-  amber: "#d9a23b",
+  amber: "#f0a860",
   // neutrals
-  ink: "#e8edf6",
-  ink2: "#9aa7c0",
-  hairline: "#26334c",
-  grid: "rgba(232,237,246,0.09)",
-  paper: "#0d1420",
-  raised: "#131c2e",
-  inset: "#0a101b",
+  ink: "#e7eef9",
+  ink2: "#a2b3d1",
+  hairline: "#24334f",
+  grid: "rgba(231,238,249,0.09)",
+  paper: "#0b1220",
+  raised: "#121c30",
+  inset: "#1a2740",
 } as const;
 
 /** recharts <Tooltip contentStyle> - one tooltip face for the whole app.

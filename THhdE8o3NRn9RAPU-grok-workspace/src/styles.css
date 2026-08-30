@@ -1,0 +1,249 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-void: #0b1220;
+  --color-night: #121c30;
+  --color-panel: #1a2740;
+  --color-line: #24334f;
+  --color-ink: #e7eef9;
+  --color-mist: #a2b3d1;
+  --color-gold: #f5c542;
+  --color-teal: #35d0ba;
+  --color-coral: #ff6b6b;
+  --color-amber: #f0a860;
+  --color-signal: #5b8def;
+  --color-void-deep: #070b14;
+  --color-gold-dim: #3a3118;
+  --color-teal-dim: #12352f;
+  --color-coral-dim: #3a1c22;
+  --color-amber-dim: #3a2c18;
+  --color-signal-dim: #1a2748;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+
+  --shadow-border: 0 0 0 1px rgb(255 255 255 / 0.07);
+  --shadow-border-hover: 0 0 0 1px rgb(255 255 255 / 0.13);
+  --shadow-gold: 0 0 24px rgb(245 197 66 / 0.22);
+  --shadow-panel: 0 12px 40px rgb(0 0 0 / 0.28);
+  --shadow-tone-gold: 0 0 0 1px color-mix(in oklab, var(--color-gold) 45%, transparent);
+  --shadow-tone-teal: 0 0 0 1px color-mix(in oklab, var(--color-teal) 40%, transparent);
+  --shadow-tone-coral: 0 0 0 1px color-mix(in oklab, var(--color-coral) 40%, transparent);
+  --shadow-tone-amber: 0 0 0 1px color-mix(in oklab, var(--color-amber) 42%, transparent);
+  --shadow-tone-signal: 0 0 0 1px color-mix(in oklab, var(--color-signal) 45%, transparent);
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 0.875rem;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    background: var(--color-void);
+    color: var(--color-ink);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    letter-spacing: -0.011em;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal) 40%, transparent);
+    color: var(--color-ink);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .kicker {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-mist);
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .hero-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: clamp(2.25rem, 1.4rem + 3vw, 3.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    font-weight: 500;
+  }
+
+  .panel {
+    background: var(--color-night);
+    box-shadow: var(--shadow-border);
+    border-radius: var(--radius-xl);
+  }
+
+  .panel-inset {
+    background: var(--color-panel);
+    box-shadow: var(--shadow-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .hairline {
+    box-shadow: var(--shadow-border);
+  }
+
+  .starfield {
+    background-color: var(--color-void);
+    background-image:
+      radial-gradient(ellipse 80% 60% at 80% 10%, rgb(245 197 66 / 0.08), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 10% 90%, rgb(91 141 239 / 0.08), transparent 50%),
+      radial-gradient(1.2px 1.2px at 12% 22%, rgb(231 238 249 / 0.55), transparent),
+      radial-gradient(1px 1px at 28% 64%, rgb(231 238 249 / 0.35), transparent),
+      radial-gradient(1.4px 1.4px at 48% 18%, rgb(231 238 249 / 0.5), transparent),
+      radial-gradient(1px 1px at 66% 72%, rgb(231 238 249 / 0.28), transparent),
+      radial-gradient(1.2px 1.2px at 82% 36%, rgb(231 238 249 / 0.45), transparent),
+      radial-gradient(1px 1px at 91% 78%, rgb(231 238 249 / 0.3), transparent),
+      radial-gradient(1.5px 1.5px at 8% 82%, rgb(245 197 66 / 0.35), transparent),
+      radial-gradient(1px 1px at 74% 12%, rgb(53 208 186 / 0.35), transparent);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.28);
+    opacity: 0.72;
+  }
+}
+
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-node {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes orbit-dash {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+.animate-twinkle {
+  animation: twinkle 3.6s ease-in-out infinite;
+}
+
+.animate-breathe {
+  animation: breathe 2.8s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.animate-feed-in {
+  animation: feed-in 280ms var(--ease-smooth) both;
+}
+
+.animate-pulse-node {
+  animation: pulse-node 1.4s ease-in-out infinite;
+}
+
+.animate-orbit-dash {
+  animation: orbit-dash 8s linear infinite;
+}
+
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--color-panel) 0%,
+    color-mix(in oklab, var(--color-mist) 18%, var(--color-panel)) 50%,
+    var(--color-panel) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-twinkle,
+  .animate-breathe,
+  .animate-feed-in,
+  .animate-pulse-node,
+  .animate-orbit-dash,
+  .skel {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "NorthStar",
+      "hasCanvas": false,
+      "bodyTextLen": 1889,
+      "bodyTextHash": "4252502f7a5e1a396352de8960edef2fa15e3150eb4d8f5f6abc86537f283a20",
+      "bodyTextPrefix": "COCKPIT $102,480 +1.2% ODDS 68% VOYAGE 3/12 Closed WX 74 up·calm",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "NorthStar",
+      "hasCanvas": false,
+      "bodyTextLen": 1872,
+      "bodyTextHash": "51260623b3e985a7affb1a1f18a1660f96e994e0b48f9a97e974e4ea25a301fc",
+      "bodyTextPrefix": "$102,480 +1.2% ODDS 68% Closed PAPER Auto Run one pass Kill swit",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}
