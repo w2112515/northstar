@@ -21,6 +21,10 @@ npm-debug.log*
 data/
 *.jsonl.tmp
 
+# design reference only - the Grok App Builder prototype (docs/DESIGN.md v4.1
+# visual spec source); never part of the build
+THhdE8o3NRn9RAPU-grok-workspace/
+
 # os/editor
 .DS_Store
 Thumbs.db
