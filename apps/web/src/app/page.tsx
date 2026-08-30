@@ -17,6 +17,7 @@ import {
   Stamp,
 } from "@/components/ui";
 import { ProbStrip, TrajectoryHero } from "@/components/trajectory";
+import { GoalOrbit } from "@/components/orbit";
 import type {
   AdvisorState,
   Approval,
@@ -163,67 +164,110 @@ export default function Track() {
         </div>
       )}
 
-      {/* ---------------------------------------------------------- hero */}
-      <section className="panel grid gap-6 px-6 py-5 lg:grid-cols-[minmax(300px,380px)_1fr] lg:items-start">
-        <div>
-          <div className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">
-            Portfolio equity · paper account
-          </div>
-          <div className="mt-2 font-mono text-hero font-semibold tabular-nums tracking-tight">
-            {fmtUsd(equity)}
-          </div>
-          <div
-            className={`mt-1 font-mono text-section tabular-nums ${
-              state.day_pnl_pct >= 0 ? "text-green" : "text-red"
-            }`}
-          >
-            {state.day_pnl_pct >= 0 ? "+" : ""}
-            {fmtPct(state.day_pnl_pct, 2)} today
-          </div>
-          {plan && bands?.bands?.p50?.length && base != null && (
-            <div className="mt-5">
-              <ProbStrip
-                bands={bands.bands}
-                base={base}
-                target={target}
-                probability={plan.probability}
-              />
+      {/* ------------------------------------------------------------ hero
+          With a lump-sum destination: the prototype's DESTINATION composition
+          - meta column + the big goal orbit. Otherwise fall back to the
+          equity/fan layout (monthly-income plans) or the plan-it CTA. */}
+      {goal && target != null && base != null ? (
+        <section className="panel grid gap-6 px-6 py-6 lg:grid-cols-[minmax(280px,360px)_1fr] lg:items-center">
+          <div>
+            <div className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">
+              Destination
             </div>
-          )}
-          {plan && !bands?.bands?.p50?.length && (
-            <p className="mt-4 font-mono text-micro text-ink2">
-              {Math.round(plan.probability * 100)}% odds of arrival · Monte Carlo ·{" "}
-              {FEASIBILITY_TEXT[plan.feasibility] ?? plan.feasibility.replace(/_/g, " ")} · estimate,
-              not a promise
+            <div className="mt-1.5 font-mono text-display font-semibold tabular-nums tracking-tight">
+              {fmtUsd(target, 0)}
+            </div>
+            <p className="mt-1 text-body text-ink2">
+              {fmtUsd(base, 0)} → {goal.horizon_months ?? bands?.months ?? 12} months · paper
+              account
             </p>
-          )}
-        </div>
-        <div>
-          {goal ? (
-            <TrajectoryHero
-              bands={bands?.bands?.p50?.length ? bands.bands : null}
-              months={bands?.months ?? goal.horizon_months ?? 12}
-              target={target}
-              base={base ?? undefined}
-              start={bands?.start}
-              equity={equityCurve}
-            />
-          ) : (
-            <div className="py-2">
-              <h2 className="text-page font-semibold">Set your North Star</h2>
-              <p className="mt-1 max-w-xl text-body text-ink2">
-                Tell us the destination - &quot;grow $100k to $110k in a year&quot; - and we&apos;ll
-                show you honest odds before a single simulated dollar moves.
-              </p>
-              <div className="mt-4">
-                <Link href="/start">
-                  <Button>Plan it</Button>
-                </Link>
-              </div>
+            <div className="mt-4 flex items-baseline gap-2">
+              <span className="font-mono text-page font-semibold tabular-nums">
+                {fmtUsd(equity)}
+              </span>
+              <span
+                className={`font-mono text-micro tabular-nums ${
+                  state.day_pnl_pct >= 0 ? "text-green" : "text-red"
+                }`}
+              >
+                {state.day_pnl_pct >= 0 ? "+" : ""}
+                {fmtPct(state.day_pnl_pct, 2)} today
+              </span>
             </div>
-          )}
-        </div>
-      </section>
+            {plan && (
+              <p className="mt-1 font-mono text-micro text-ink2">
+                <span className="font-semibold text-star">
+                  {Math.round(plan.probability * 100)}%
+                </span>{" "}
+                odds of arrival · {FEASIBILITY_TEXT[plan.feasibility] ?? plan.feasibility.replace(/_/g, " ")}{" "}
+                · estimate, not a promise
+              </p>
+            )}
+            {plan && bands?.bands?.p50?.length ? (
+              <div className="mt-4">
+                <ProbStrip
+                  bands={bands.bands}
+                  base={base}
+                  target={target}
+                  probability={plan.probability}
+                />
+              </div>
+            ) : null}
+          </div>
+          <GoalOrbit base={base} target={target} current={equity} />
+        </section>
+      ) : (
+        <section className="panel grid gap-6 px-6 py-5 lg:grid-cols-[minmax(300px,380px)_1fr] lg:items-start">
+          <div>
+            <div className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">
+              Portfolio equity · paper account
+            </div>
+            <div className="mt-2 font-mono text-hero font-semibold tabular-nums tracking-tight">
+              {fmtUsd(equity)}
+            </div>
+            <div
+              className={`mt-1 font-mono text-section tabular-nums ${
+                state.day_pnl_pct >= 0 ? "text-green" : "text-red"
+              }`}
+            >
+              {state.day_pnl_pct >= 0 ? "+" : ""}
+              {fmtPct(state.day_pnl_pct, 2)} today
+            </div>
+            {plan && (
+              <p className="mt-4 font-mono text-micro text-ink2">
+                {Math.round(plan.probability * 100)}% odds of arrival · Monte Carlo ·{" "}
+                {FEASIBILITY_TEXT[plan.feasibility] ?? plan.feasibility.replace(/_/g, " ")} ·
+                estimate, not a promise
+              </p>
+            )}
+          </div>
+          <div>
+            {goal ? (
+              <TrajectoryHero
+                bands={bands?.bands?.p50?.length ? bands.bands : null}
+                months={bands?.months ?? goal.horizon_months ?? 12}
+                target={target}
+                base={base ?? undefined}
+                start={bands?.start}
+                equity={equityCurve}
+              />
+            ) : (
+              <div className="py-2">
+                <h2 className="text-page font-semibold">Set your North Star</h2>
+                <p className="mt-1 max-w-xl text-body text-ink2">
+                  Tell us the destination - &quot;grow $100k to $110k in a year&quot; - and
+                  we&apos;ll show you honest odds before a single simulated dollar moves.
+                </p>
+                <div className="mt-4">
+                  <Link href="/start">
+                    <Button>Plan it</Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ------------------------------------------------------ needs you */}
       {needsYou && (
@@ -233,48 +277,71 @@ export default function Track() {
           hint={`${approvals.length + (advice ? 1 : 0)} pending`}
           info="Nothing unusual happens without your tap. Silence is an automatic no after the timeout."
         >
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
             {approvals.map((a) => (
-              <div key={a.id} className="panel-inset animate-feed-in p-4 shadow-tone-amber">
-                <div className="flex items-center justify-between gap-2">
-                  <Stamp tone="amber">needs you</Stamp>
-                  <span className="font-mono text-micro text-ink2">{fmtTs(a.created_at)}</span>
+              <div
+                key={a.id}
+                className="panel-inset animate-feed-in flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 shadow-tone-amber"
+                title={fmtTs(a.created_at)}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-body">{a.order_plan.human}</div>
+                  <div className="truncate text-micro text-amber">
+                    {a.verdict.reason_codes.map((c) => c.replace(/_/g, " ")).join(", ")} - the gate
+                    held it for you.
+                  </div>
                 </div>
-                <div className="mt-2.5 text-body">{a.order_plan.human}</div>
-                <div className="mt-1 text-micro leading-relaxed text-amber">
-                  Why it paused: {a.verdict.reason_codes.map((c) => c.replace(/_/g, " ")).join(", ")}.
-                  The gate held it for you.
-                </div>
-                <div className="mt-0.5 font-mono text-micro tabular-nums text-red">
-                  Worst case −{fmtUsd(a.order_plan.est_max_loss)}
-                </div>
-                <div className="mt-3 flex gap-2">
+                <span className="shrink-0 font-mono text-micro tabular-nums text-red">
+                  −{fmtUsd(a.order_plan.est_max_loss)}
+                </span>
+                <div className="flex shrink-0 gap-1.5">
                   <Button
-                    variant="primary"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy !== ""}
+                    onClick={() => act("reject", () => apiPost(`/api/approvals/${a.id}`, { approve: false }))}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    variant="affirm"
+                    size="sm"
                     disabled={busy !== ""}
                     onClick={() => act("approve", () => apiPost(`/api/approvals/${a.id}`, { approve: true }))}
                   >
                     Approve
                   </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={busy !== ""}
-                    onClick={() => act("reject", () => apiPost(`/api/approvals/${a.id}`, { approve: false }))}
-                  >
-                    Skip this one
-                  </Button>
                 </div>
               </div>
             ))}
             {advice && (
-              <div className="panel-inset animate-feed-in p-4 shadow-tone-amber">
-                <div className="flex items-center justify-between gap-2">
-                  <Stamp tone="amber">needs you</Stamp>
-                  <span className="font-mono text-micro text-ink2">{fmtTs(advice.ts)}</span>
-                </div>
-                <div className="mt-2.5 text-body">
-                  Plan advice: tilt toward{" "}
-                  <span className="font-medium">{advice.best_family.replace(/_/g, " ")}</span>
+              <div
+                className="panel-inset animate-feed-in px-3 py-2 shadow-tone-amber"
+                title={fmtTs(advice.ts)}
+              >
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <div className="min-w-0 flex-1 text-body">
+                    Plan advice: tilt toward{" "}
+                    <span className="font-medium">{advice.best_family.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy !== ""}
+                      onClick={() => act("advice", () => apiPost("/api/advisor/decide", { adopt: false }))}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      variant="affirm"
+                      size="sm"
+                      disabled={busy !== ""}
+                      onClick={() => act("advice", () => apiPost("/api/advisor/decide", { adopt: true }))}
+                    >
+                      {busy === "advice" ? "Applying…" : "Adopt tilt"}
+                    </Button>
+                  </div>
                 </div>
                 <ul className="mt-1.5 space-y-0.5 text-micro leading-snug text-ink2">
                   {advice.evidence.map((line, i) => (
@@ -285,7 +352,7 @@ export default function Track() {
                   {Object.entries(advice.tilts).map(([fam, d]) => (
                     <span
                       key={fam}
-                      className={`border px-1.5 py-px font-mono text-micro tabular-nums ${
+                      className={`rounded-[5px] border px-1.5 py-px font-mono text-micro tabular-nums ${
                         d >= 0 ? "border-green/50 text-green" : "border-red/50 text-red"
                       }`}
                     >
@@ -293,22 +360,6 @@ export default function Track() {
                       {(d * 100).toFixed(0)}%
                     </span>
                   ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    variant="primary"
-                    disabled={busy !== ""}
-                    onClick={() => act("advice", () => apiPost("/api/advisor/decide", { adopt: true }))}
-                  >
-                    {busy === "advice" ? "Applying…" : "Adopt tilt"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={busy !== ""}
-                    onClick={() => act("advice", () => apiPost("/api/advisor/decide", { adopt: false }))}
-                  >
-                    Dismiss
-                  </Button>
                 </div>
                 <p className="mt-2 text-micro leading-relaxed text-ink2">
                   Bounded plan-weight tilt, reversible; dismissed advice is still scored so the
@@ -375,6 +426,26 @@ export default function Track() {
           </p>
         )}
       </Section>
+
+      {/* ------------------------------------------------- plan vs reality
+          The honesty visual: real equity over the Monte Carlo cone. Shown as
+          its own panel when the orbit owns the hero. */}
+      {goal && target != null && base != null && (
+        <Section
+          title="Plan vs reality"
+          hint="updated nightly"
+          info="The gold line is the real account; the cone is 500 simulated futures from historical returns. If the gold line leaves the cone, the plan is off script - that is worth knowing early."
+        >
+          <TrajectoryHero
+            bands={bands?.bands?.p50?.length ? bands.bands : null}
+            months={bands?.months ?? goal.horizon_months ?? 12}
+            target={target}
+            base={base}
+            start={bands?.start}
+            equity={equityCurve}
+          />
+        </Section>
+      )}
 
       {/* ------------------------------------------------------ positions */}
       <Section

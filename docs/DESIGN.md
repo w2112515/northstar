@@ -17,7 +17,7 @@
 | 路由 | 名称 | 回答的问题 | 内容 |
 |---|---|---|---|
 | `/start` | 向导 | 我要去哪？ | 四步：目的地（轨道弧）→ 风险三问 → 诚实计划（概率+锥形图+诚实替代方案红路径）→ Begin |
-| `/` | **Track** | 我在轨道上吗？ | hero（72px 净值 + ProbStrip 终端分位条 + TrajectoryHero 计划vs现实锥形图）→ Needs you（审批+顾问倾斜，统一决策区）→ Today（daily brief，AI 叙述走 FieldNote）→ Positions + queued orders |
+| `/` | **Track** | 我在轨道上吗？ | **DESTINATION hero**（v4.1 收割原型构图：左列目标额/净值/金色 odds/ProbStrip + 右侧大轨道弧 GoalOrbit，teal→金渐变航迹）→ Needs you（琥珀辉光横行：文案+红色最坏情况+Skip/teal Approve）→ Today（daily brief，AI 叙述走 FieldNote）→ Plan vs reality（TrajectoryHero 锥形图独立面板）→ Positions + queued orders。无 lump 目标时回退净值+扇形 hero |
 | `/activity` | **Activity** | 它在干什么？ | 上下文条（regime/weather/开盘/autopilot/scout）→ Live run schematic（ADK 工作流 schematic）→ Market（蜡烛图 + 分组 watchlist）→ **Scout report**（Top-K 表 + 人话理由 + 期权观察行 + Scan now，demo 0:55 镜头）→ Event stream（小印章行）→ Controls（autopilot/run/kill） |
 | `/proof` | **Proof** | 我凭什么信它？ | 印章账本（按日分组/筛选/搜索/展开 JSON）→ 预测打分（coverage/pinball + 扇形图）→ 闸门拒绝统计 → 辩论记录 |
 | `/system` | **System** | 机器怎么运转？ | 策略规格表（非卡片）+ 实例表 → 进化（晋级候选/实验账本）→ 因子挖掘 → 气象验证 → 家族 regime 统计 |
@@ -36,7 +36,7 @@
 | `ink` / `ink-2` | `#E7EEF9` / `#A2B3D1` | 主文字 / 次要文字（原型 ink/mist） |
 | `hairline` | `#24334F` | 格线与描边 |
 | `indigo` | `#5B8DEF` | **交互强调**（原型 signal）：链接、focus ring、导航/tab 激活态、running、champion 印章 |
-| `teal` | `#35D0BA` | **确定性代码**：schematic 的 CODE 签、确定性节点 |
+| `teal` | `#35D0BA` | **确定性代码 + 入账确认**：schematic 的 CODE 签、轨道弧出发端、`Button variant="affirm"`（Approve/Adopt） |
 | `star` | `#F5C542` | **星时刻，仅三处**（金色三律，见下）+ 顶栏 ✦ 词标与 PAPER 药丸 |
 | `red` | `#FF6B6B` | 拒绝/亏损/危险（原型 coral）——印章形态 |
 | `green` | `#4CAF8E` | 成交/盈利/验证通过 |
@@ -44,9 +44,9 @@
 
 **金色三律**（star 只出现在这三处，其余一律 review 打回）：
 
-1. **主 CTA**：Button primary = 金底夜字（每屏至多一个星时刻动作）。
+1. **主 CTA**：Button primary = 金底夜字（每屏至多一个星时刻动作）。**入账/确认类动作走 teal `affirm`**（Approve、Adopt tilt），不占用星时刻名额。
 2. **AI 归因**：FieldNote 左边线与洗底（衬线斜体质地保留）。
-3. **目标与航迹**：TrajectoryHero 实际净值线、目标虚线与 ✦ 标、ProbStrip 目标星刻度、顶栏 ProgressRuler 填充、/start 轨道弧的星与船标。
+3. **目标与航迹**：TrajectoryHero 实际净值线、目标虚线与 ✦ 标、ProbStrip 目标星刻度、顶栏 ProgressRuler 填充与 ODDS 数字、轨道弧的星/船标/渐变到站端（Track hero + /start）。
 
 hover/焦点/激活态永远归 indigo，不得用金表达交互状态；锥形扇区保持中性墨色。
 
@@ -60,7 +60,7 @@ Geist Sans（UI）+ Geist Mono（全部数字/标签/印章，tabular-nums）+ �
 
 - 页面 = void 上的圆角面板栈（`Section` = `.panel`：night 底 + 16px 圆角 + 1px 白 7% 辉光环（shadow 实现，永不挤动布局）+ kicker 节标）。面板内的独立内容（待审批卡、内嵌图表、JSON pre）用 `.panel-inset`（panel 色 + 12px 圆角）。页面节奏 `space-y-4`。
 - 账本行签名版式：`[Stamp 96px | 内容 1fr | 时间戳 mono 右对齐]`，展开见原始 JSON。
-- 顶栏单行：✦ 金星词标 · 4 项导航（激活态 = inset 底 + indigo 竖线信号）· EQUITY kicker + 净值+今日Δ · ProgressRuler 细进度尺 · 琥珀 "N need you" · kill 印章 · NY 时钟 · 金环 PAPER 药丸。sticky，night 底 85% + blur。
+- 顶栏 = 状态 ribbon：✦ 金星词标 · 4 项导航（激活态 = inset 底 + indigo 竖线信号）· EQUITY kicker + 净值+今日Δ · **ODDS 金色百分比** · ProgressRuler 细进度尺 · **WX 读数** · **开盘绿灯** · 琥珀 "N need you" · kill 印章 · NY 时钟 · 金环 PAPER 药丸。sticky，night 底 85% + blur（窄屏按优先级隐藏）。
 - 容器 `max-w-6xl`。圆角字典：面板 16 / 内面板 12 / 按钮 8 / 印章 5。
 
 ### 签名元素

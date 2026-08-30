@@ -347,7 +347,7 @@ export default function Activity() {
           <button
             onClick={() => act("tick", () => apiPost("/api/loop/tick", { reason: "manual" }))}
             disabled={busy !== ""}
-            className="rounded-lg border border-hairline bg-inset px-4 py-2 text-body text-ink transition-colors hover:border-ink/40 disabled:opacity-40"
+            className="rounded-lg bg-indigo px-4 py-2 text-body font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {busy === "tick" ? "Running one pass…" : "Run one pass now"}
           </button>

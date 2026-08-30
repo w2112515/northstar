@@ -1,8 +1,8 @@
-/** GoalOrbit - the promise visual, living ONLY inside the dark /start room
- *  (docs/DESIGN.md v3: the star belongs to the promise, the ledger to the
- *  proof). An arc from the capital you start with to the target you picked,
- *  drawn under a small starfield. Pure SVG; deterministic star positions so
- *  server and client renders never disagree. Colors: CHART. */
+/** GoalOrbit - the promise visual: an arc from the capital you start with to
+ *  the target you picked, drawn under a small starfield. Since v4.1 it is
+ *  the Track hero as well as the /start opener (the prototype's DESTINATION
+ *  composition). Pure SVG; deterministic star positions so server and client
+ *  renders never disagree. Colors: CHART. */
 
 import { fmtUsd } from "@/lib/api";
 import { CHART } from "@/lib/theme";
@@ -74,6 +74,13 @@ export function GoalOrbit({
       role="img"
       aria-label={`Plan progress: ${pct}% of the way from ${fmtUsd(base)} to ${fmtUsd(target)}`}
     >
+      <defs>
+        {/* the sailed leg warms from teal (departure) to gold (the star) */}
+        <linearGradient id="voyage-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={CHART.teal} />
+          <stop offset="1" stopColor={CHART.star} />
+        </linearGradient>
+      </defs>
       {STARS.map(([x, y, r, delay], i) => (
         <circle
           key={i}
@@ -96,13 +103,13 @@ export function GoalOrbit({
         strokeDasharray="3 5"
         className="animate-orbit-dash"
       />
-      {/* sailed leg: soft glow under a solid star-gold line */}
+      {/* sailed leg: soft glow under a teal-to-gold gradient line */}
       <path
         d={ARC_D}
         fill="none"
-        stroke={CHART.star}
-        strokeWidth={6}
-        strokeOpacity={0.14}
+        stroke="url(#voyage-grad)"
+        strokeWidth={7}
+        strokeOpacity={0.18}
         pathLength={100}
         strokeDasharray={`${t * 100} 100`}
         strokeLinecap="round"
@@ -110,15 +117,15 @@ export function GoalOrbit({
       <path
         d={ARC_D}
         fill="none"
-        stroke={CHART.star}
-        strokeWidth={2}
+        stroke="url(#voyage-grad)"
+        strokeWidth={2.5}
         pathLength={100}
         strokeDasharray={`${t * 100} 100`}
         strokeLinecap="round"
       />
 
       {/* departure */}
-      <circle cx={P0.x} cy={P0.y} r={3} fill="none" stroke={CHART.ink2} strokeWidth={1.2} />
+      <circle cx={P0.x} cy={P0.y} r={3.5} fill={CHART.teal} fillOpacity={0.9} />
       <text x={P0.x - 6} y={P0.y + 20} fill={CHART.ink2} fontSize={11} fontFamily="var(--font-geist-mono)">
         {fmtUsd(base)}
       </text>
@@ -140,20 +147,20 @@ export function GoalOrbit({
         {fmtUsd(target)}
       </text>
 
-      {/* the ship: where the plan currently stands */}
-      <circle cx={ship.x} cy={ship.y} r={9} fill={CHART.star} opacity={0.18} className="animate-pulse-slow" />
-      <circle cx={ship.x} cy={ship.y} r={4} fill={CHART.star} stroke={CHART.paper} strokeWidth={1.5} />
+      {/* the ship: where the plan currently stands (gold-ringed dot) */}
+      <circle cx={ship.x} cy={ship.y} r={11} fill={CHART.star} opacity={0.16} className="animate-pulse-slow" />
+      <circle cx={ship.x} cy={ship.y} r={4.5} fill={CHART.paper} stroke={CHART.star} strokeWidth={2} />
       {progress > 0 && (
         <text
           x={ship.x}
-          y={ship.y + 22}
+          y={ship.y + 24}
           textAnchor="middle"
           fill={CHART.star}
-          opacity={0.8}
-          fontSize={11}
+          fontSize={12}
+          fontWeight={600}
           fontFamily="var(--font-geist-mono)"
         >
-          {pct}% of the way
+          {fmtUsd(current)}
         </text>
       )}
     </svg>

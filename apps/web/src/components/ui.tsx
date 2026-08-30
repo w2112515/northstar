@@ -195,13 +195,15 @@ export function Button({
   children,
   onClick,
   variant = "primary",
+  size = "md",
   disabled,
   type = "button",
   className = "",
 }: {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "ghost" | "danger" | "subtle";
+  variant?: "primary" | "affirm" | "ghost" | "danger" | "subtle";
+  size?: "md" | "sm";
   disabled?: boolean;
   type?: "button" | "submit";
   className?: string;
@@ -210,17 +212,21 @@ export function Button({
     // The primary action is a star moment: gold plate, night text.
     primary:
       "bg-star text-paper font-semibold hover:bg-star/90 disabled:opacity-40 disabled:cursor-not-allowed",
+    // Money-in / confirmation: teal plate (prototype approve language).
+    affirm:
+      "bg-teal text-paper font-semibold hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed",
     ghost:
       "border border-hairline text-ink hover:border-ink/40 disabled:opacity-40",
     subtle: "bg-inset text-ink hover:bg-hairline/50 disabled:opacity-40",
     danger: "border border-red/60 text-red hover:bg-red/5 disabled:opacity-40",
   }[variant];
+  const sizing = size === "sm" ? "px-3 py-1" : "px-4 py-2";
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-lg px-4 py-2 text-body transition-colors ${styles} ${className}`}
+      className={`rounded-lg text-body transition-colors ${sizing} ${styles} ${className}`}
     >
       {children}
     </button>

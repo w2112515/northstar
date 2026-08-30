@@ -98,8 +98,8 @@ body {
 .starfield {
   background-color: var(--paper);
   background-image:
-    radial-gradient(ellipse 80% 60% at 80% 10%, color-mix(in srgb, var(--star) 8%, transparent), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 10% 90%, color-mix(in srgb, var(--indigo) 8%, transparent), transparent 50%),
+    radial-gradient(ellipse 80% 60% at 80% 10%, color-mix(in srgb, var(--star) 12%, transparent), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 10% 90%, color-mix(in srgb, var(--indigo) 13%, transparent), transparent 55%),
     radial-gradient(1.2px 1.2px at 12% 22%, color-mix(in srgb, var(--ink) 55%, transparent), transparent),
     radial-gradient(1px 1px at 28% 64%, color-mix(in srgb, var(--ink) 35%, transparent), transparent),
     radial-gradient(1.4px 1.4px at 48% 18%, color-mix(in srgb, var(--ink) 50%, transparent), transparent),
@@ -117,7 +117,7 @@ body {
    so it never shifts layout. */
 .panel {
   background: var(--raised);
-  box-shadow: var(--shadow-border);
+  box-shadow: var(--shadow-border), var(--shadow-panel);
   border-radius: 16px;
 }
 

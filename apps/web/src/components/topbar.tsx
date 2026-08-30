@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { fmtPct, fmtUsd } from "@/lib/api";
 import { useApi, useRefreshBridge } from "@/lib/data";
 import { PaperTag, Stamp } from "@/components/ui";
-import type { EngineState } from "@/lib/types";
+import type { EngineState, Weather } from "@/lib/types";
 
 const NAV = [
   { href: "/", label: "Track" },
@@ -103,6 +103,7 @@ export function TopBar() {
   useRefreshBridge();
 
   const state = useApi<EngineState>("/api/engine/state", 15000).data ?? null;
+  const weather = useApi<{ weather: Weather }>("/api/weather", 60000).data?.weather ?? null;
   const approvals =
     useApi<{ pending: { id: string }[] }>("/api/approvals", 20000).data?.pending.length ?? 0;
   // Needs-you must match the Track page's count: approvals + pending advice.
@@ -169,7 +170,40 @@ export function TopBar() {
               </span>
             </span>
           )}
+          {state?.plan && (
+            <span className="hidden items-baseline gap-1.5 lg:flex" title="Monte Carlo odds of reaching the goal - estimate, not a promise">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">
+                Odds
+              </span>
+              <span className="font-mono text-body font-semibold tabular-nums text-star">
+                {Math.round(state.plan.probability * 100)}%
+              </span>
+            </span>
+          )}
           {state && <ProgressRuler state={state} />}
+          {weather?.score != null && (
+            <span
+              className="hidden items-baseline gap-1.5 xl:flex"
+              title={`Market weather ${Math.round(weather.score)}/100 (${weather.bucket})`}
+            >
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">WX</span>
+              <span className="font-mono text-body font-semibold tabular-nums">
+                {Math.round(weather.score)}
+              </span>
+            </span>
+          )}
+          {state && (
+            <span className="hidden items-center gap-1.5 md:flex" title="US market session">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  state.clock.is_open ? "bg-green" : "bg-ink2/50"
+                }`}
+              />
+              <span className="font-mono text-micro text-ink2">
+                {state.clock.is_open ? "Open" : "Closed"}
+              </span>
+            </span>
+          )}
           {needsYou > 0 && (
             <Link href="/#needs-you" className="animate-stamp-in">
               <Stamp tone="amber">{needsYou} need you</Stamp>
