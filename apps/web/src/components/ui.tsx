@@ -1,8 +1,9 @@
 import { ReactNode, useState } from "react";
 
-/* EVIDENCE v1 primitives - docs/DESIGN.md v3.
+/* Night Ledger primitives - docs/DESIGN.md v4.
    Ruled sections instead of card waterfalls; stamps for verdicts; field
-   notes for AI attribution. One accent (indigo), hairlines for structure. */
+   notes for AI attribution. Indigo for interaction, gold for star moments
+   only (primary CTA / FieldNote / the target), hairlines for structure. */
 
 // ------------------------------------------------------------------ Section
 
@@ -135,9 +136,8 @@ export function eventStamp(e: { kind: string; payload?: Record<string, unknown> 
 
 // --------------------------------------------------------------- FieldNote
 
-/** AI attribution is a texture, not a color: serif italic narration on a
- *  faint wash, with a monospaced signature line. Deterministic facts never
- *  wear this costume. */
+/** AI attribution is a texture AND the star color: serif italic narration
+ *  on a faint gold wash. Deterministic facts never wear this costume. */
 export function FieldNote({
   by,
   ts,
@@ -151,7 +151,7 @@ export function FieldNote({
   children: ReactNode;
 }) {
   return (
-    <figure className="border-l-2 border-indigo/30 bg-indigo/[0.04] px-4 py-3">
+    <figure className="border-l-2 border-star/40 bg-star/[0.05] px-4 py-3">
       <blockquote className="font-serif text-body italic leading-relaxed text-ink/90">
         {children}
       </blockquote>
@@ -205,10 +205,9 @@ export function Button({
   className?: string;
 }) {
   const styles = {
-    // text-raised inverts with the theme: white on indigo in the light
-    // ledger, dark on the lifted indigo inside the dark /start room
+    // The primary action is a star moment: gold plate, night text.
     primary:
-      "bg-indigo text-raised font-semibold hover:bg-indigo/90 disabled:opacity-40 disabled:cursor-not-allowed",
+      "bg-star text-paper font-semibold hover:bg-star/90 disabled:opacity-40 disabled:cursor-not-allowed",
     ghost:
       "border border-hairline text-ink hover:border-ink/40 disabled:opacity-40",
     subtle: "bg-inset text-ink hover:bg-hairline/50 disabled:opacity-40",

@@ -18,7 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import { apiPost, fmtPct, fmtUsd } from "@/lib/api";
-import { AXIS_TICK_DARK, CHART_DARK, RECHARTS_TOOLTIP_DARK } from "@/lib/theme";
+import { AXIS_TICK, CHART, RECHARTS_TOOLTIP } from "@/lib/theme";
 import { Button, Stamp } from "@/components/ui";
 import { GoalOrbit } from "@/components/orbit";
 
@@ -162,7 +162,7 @@ export default function Start() {
         : "Honestly unrealistic on this setup";
 
   return (
-    <div className="start-dark starfield min-h-screen w-full bg-paper text-ink">
+    <div className="min-h-screen w-full bg-paper text-ink">
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="mb-8">
           <div className="font-mono text-micro uppercase tracking-[0.2em] text-ink2">
@@ -406,23 +406,23 @@ export default function Start() {
               <div className="mt-4 h-56 border border-hairline bg-inset px-2 py-2">
                 <ResponsiveContainer>
                   <AreaChart data={chartData} margin={{ left: 8, right: 8, top: 8 }}>
-                    <CartesianGrid stroke={CHART_DARK.grid} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" tick={AXIS_TICK_DARK} tickLine={false} />
+                    <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tick={AXIS_TICK} tickLine={false} />
                     <YAxis
-                      tick={AXIS_TICK_DARK}
+                      tick={AXIS_TICK}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
                       domain={["auto", "auto"]}
                     />
                     <Tooltip
-                      contentStyle={RECHARTS_TOOLTIP_DARK}
+                      contentStyle={RECHARTS_TOOLTIP}
                       formatter={(v, name) => [fmtUsd(Number(v ?? 0)), String(name)]}
                       labelFormatter={(l) => `Month ${l}`}
                     />
-                    <Area dataKey="p90" name="Lucky path (90th)" stroke="none" fill={CHART_DARK.green} fillOpacity={0.12} />
-                    <Area dataKey="p10" name="Rough path (10th)" stroke="none" fill={CHART_DARK.inset} fillOpacity={1} />
-                    <Line dataKey="p50" name="Median" stroke={CHART_DARK.star} strokeWidth={2} dot={false} />
+                    <Area dataKey="p90" name="Lucky path (90th)" stroke="none" fill={CHART.green} fillOpacity={0.12} />
+                    <Area dataKey="p10" name="Rough path (10th)" stroke="none" fill={CHART.inset} fillOpacity={1} />
+                    <Line dataKey="p50" name="Median" stroke={CHART.star} strokeWidth={2} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

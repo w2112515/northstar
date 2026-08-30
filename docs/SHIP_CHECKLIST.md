@@ -7,7 +7,7 @@
 
 1. 打开 aistudio.google.com → Get API key → 创建。
 2. 写入 `.env` 的 `GOOGLE_API_KEY=...`。
-3. 重启 API（`scripts\dev.ps1`），驾驶舱跑一次 pass：journal 里 digest 的 `llm: true` 即生效。
+3. 重启 API（`scripts\dev.ps1`），Activity 页 Controls 跑一次 pass：journal 里 digest 的 `llm: true` 即生效。
 4. 默认模型已升级为 `gemini-3.7-flash`（8/13 GA，"agent 工作马"，已实测本 key 免费档可用），
    降级链自动退 `gemini-3.5-flash`；`gemini-3.1-pro-preview` 免费档配额为 0，已弃用。
    若演示日担心 503（新模型高负载），可给项目挂账单进 Tier 1 并设 Project Spend Cap。
@@ -31,14 +31,14 @@
 2. 启用 API：Cloud Run、Cloud Build、Firestore（Native mode 建库）。
 3. 安装 gcloud CLI → `gcloud auth login` → `gcloud config set project <id>`。
 4. 部署：`.\scripts\deploy.ps1 -ProjectId <id>`（先 API 后 Web，自动接线）。
-5. 验证：Web URL 能开驾驶舱；`<api-url>/healthz` 返回 `journal_store: firestore`。
+5. 验证：Web URL 能开 Track 页（顶栏 KPI 有数）；`<api-url>/healthz` 返回 `journal_store: firestore`。
 
 ## 4. 周一晚录制窗口（北京时间 21:30 后）
 
-美股开盘后周五排队的 4 笔订单成交 → 驾驶舱出现真实持仓与 fills。录制脚本见
-`docs/ROADMAP.md` §视频脚本。镜头顺序建议：
-不现实目标红色路径 → 改现实目标开航 → 驾驶舱真实成交 → 闸门拒绝镜头（改集中度演示）→
-Evolution 晋级审批 → journal 血缘 → Cloud Run URL + logs。
+美股开盘后周五排队的 4 笔订单成交 → Track 持仓表与 Activity 蜡烛图出现真实持仓与 fills。
+权威录制脚本见 `docs/DEMO_SCRIPT.md`（已按 Night Ledger v4 页面重映射）。镜头顺序建议：
+/start 不现实目标红色路径 → 改现实目标开航 → Track 真实成交 → 闸门拒绝镜头（改集中度演示）→
+System 进化晋级 + Track 审批 → Proof 账本血缘 → Cloud Run URL + logs。
 
 ## 5. 提交
 
@@ -185,6 +185,22 @@ Evolution 晋级审批 → journal 血缘 → Cloud Run URL + logs。
   全部有 `*_DISABLED` 开关与诚实降级路径（见 `.env.example`）；scheduler 每日夜班
   串起 scout → options → factors → compass → advisor → forecast 回评 → 进化 →
   船坞 → 挖矿 → 船长日志 → 日报。测试 300+ 绿，前端构建过。
+- ~~Night Ledger v4：前端夜色回归（8/31）~~ 已完成：
+  1. **IA 定稿四页**（承接 8/31 EVIDENCE 重构）：`/` Track（我在轨道上吗）、`/activity`
+     Activity（它在干什么）、`/proof` Proof（凭什么信）、`/system` System（机器怎么运转）
+     + `/start` 向导；旧 /research /strategies /journal /lab /onboarding 全部重定向。
+     上文历史条目中的"驾驶舱/Research 工作台/Lab/Journal"按此对照阅读。
+  2. **皮肤换夜**：EVIDENCE 的浅色纸面否决（与夜航品牌/demo 叙事冲突），全站回归夜色
+     token（globals.css `:root` 夜蓝 + 全局 starfield），结构纪律全保留（Section 格线/
+     Stamp/FieldNote/六档字阶）；`theme.ts` 收敛单一夜色 CHART；金色三律：主 CTA、
+     FieldNote AI 归因、目标与航迹（金航迹线/✦/顶栏进度尺），交互态仍归 indigo。
+  3. **侦察报告卡恢复**（EVIDENCE 重构时唯一丢失的 Wave 界面，demo 0:55 镜头）：
+     Activity 页 Scout report Section——Top-K 表（symbol/price/score/flavor 章/人话理由）
+     + 期权观察脚注行 + scanned/floor/source 脚注 + Scan now；空态/加载态/错误态齐备。
+  4. **ProbStrip 标签碰撞修复**：标签余量自包含（h-24 容器内定位，上排标签不再溢出
+     压住调用方内容）。
+  5. **文档同步**：DESIGN.md v4（夜色色板表+金色三律）、DEMO_SCRIPT.md 页面全量重映射、
+     README/TECH/本清单操作项改新页面名。
 - 剩余可选：AI Analyst MCP 工具链（`AI_ANALYST_MCP=true` 路径）、trade_updates websocket 替代轮询、
   Alpaca 周加菜：指数期权气象对冲（XSP 现金交割 put spread，用上 7/23 新功能）。
 

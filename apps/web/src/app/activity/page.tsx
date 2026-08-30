@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiPost, fmtTs } from "@/lib/api";
 import { useApi } from "@/lib/data";
-import { EmptyState, PageHeader, Section, Stamp, eventStamp } from "@/components/ui";
+import { Button, EmptyState, PageHeader, Section, Skeleton, Stamp, eventStamp } from "@/components/ui";
 import { MarketPanel, type WatchGroup } from "@/components/market";
 import { RunSchematic } from "@/components/schematic";
 import type {
@@ -16,6 +16,7 @@ import type {
   EngineState,
   ForecastDoc,
   JEvent,
+  OptionsWatch,
   PassProgress,
   Position,
   RegimeInfo,
@@ -64,7 +65,9 @@ export default function Activity() {
   }, []);
   const forecastQ = useApi<{ forecast: ForecastDoc | null; available: boolean }>("/api/forecast", 60000);
   const forecastDoc = forecastQ.data?.forecast ?? null;
-  const scout = useApi<{ scout: ScoutDoc | null }>("/api/scout", 60000).data?.scout ?? null;
+  const scoutQ = useApi<{ scout: ScoutDoc | null; options_watch: OptionsWatch }>("/api/scout", 60000);
+  const scout = scoutQ.data?.scout ?? null;
+  const optionsWatch = scoutQ.data?.options_watch ?? null;
   const weather = useApi<{ weather: Weather }>("/api/weather", 60000).data?.weather ?? null;
   const compass = useApi<{ compass: CompassDoc | null }>("/api/compass", 5 * 60000).data?.compass ?? null;
   const posQ = useApi<{ positions: Position[] }>("/api/positions", 20000);
@@ -204,6 +207,85 @@ export default function Activity() {
         <MarketPanel symbols={chartSymbols} groups={watchGroups} forecastDoc={forecastDoc} />
       </Section>
 
+      <Section
+        title="Scout report"
+        hint={scout ? fmtTs(scout.ts) : undefined}
+        info="Every night the scout scans the optionable market (or the core set, honestly labeled, when the screener is down), applies liquidity and sanity floors, and scores survivors on momentum, trend, pullback and squeeze. Factor weights re-tilt from measured rank-IC. Top picks join the trading universe and the watchlist above - this table is why those names are there."
+        actions={
+          <Button
+            variant="ghost"
+            onClick={() => act("scout", () => apiPost("/api/scout/run", {}))}
+            disabled={busy !== ""}
+          >
+            {busy === "scout" ? "Scanning…" : "Scan now"}
+          </Button>
+        }
+      >
+        {scoutQ.error ? (
+          <p className="border-l-2 border-amber bg-amber/5 px-4 py-2.5 font-mono text-micro text-amber">
+            Scout report unreachable - data may be stale.
+          </p>
+        ) : scoutQ.isLoading ? (
+          <Skeleton rows={5} />
+        ) : !scout || scout.candidates.length === 0 ? (
+          <EmptyState
+            title="No scout report yet"
+            body="The scout files its report nightly, or press Scan now to send it out immediately."
+          />
+        ) : (
+          <div>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-hairline text-left font-mono text-micro uppercase tracking-[0.12em] text-ink2">
+                  <th className="py-1.5 pr-3 font-semibold">#</th>
+                  <th className="py-1.5 pr-3 font-semibold">Symbol</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Price</th>
+                  <th className="py-1.5 pr-3 text-right font-semibold">Score</th>
+                  <th className="py-1.5 pr-3 font-semibold">Flavor</th>
+                  <th className="py-1.5 font-semibold">Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scout.candidates.map((c, i) => (
+                  <tr key={c.symbol} className="border-b border-hairline/60 last:border-0">
+                    <td className="py-2 pr-3 font-mono text-micro tabular-nums text-ink2">{i + 1}</td>
+                    <td className="py-2 pr-3 font-mono text-body font-semibold">{c.symbol}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-body tabular-nums">
+                      ${c.price.toFixed(2)}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono text-body tabular-nums">
+                      {c.score.toFixed(2)}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Stamp>{c.flavor}</Stamp>
+                    </td>
+                    <td className="py-2 text-body text-ink2">{c.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {optionsWatch && optionsWatch.ranked.length > 0 && (
+              <p className="mt-3 border-l-2 border-hairline py-0.5 pl-3 font-mono text-micro text-ink2">
+                options watch (CSP yield):{" "}
+                {optionsWatch.ranked.slice(0, 3).map((r, i) => (
+                  <span key={r.symbol} className="whitespace-nowrap">
+                    {i > 0 && " · "}
+                    <span className="text-ink">{r.symbol}</span> ${r.strike} put {r.dte}d Δ
+                    {r.delta.toFixed(2)} → {(r.ann_yield * 100).toFixed(0)}%/yr
+                  </span>
+                ))}
+              </p>
+            )}
+            <p className="mt-2 font-mono text-micro text-ink2">
+              scanned {scout.scanned.toLocaleString()} · passed floor {scout.passed_floor} · source{" "}
+              {scout.source}
+              {scout.weight_tilt ? ` · ${scout.weight_tilt}` : ""}
+              {scout.note ? ` · ${scout.note}` : ""}
+            </p>
+          </div>
+        )}
+      </Section>
+
       <Section title="Event stream" hint="latest 12" info="Everything the system did, in plain words, newest first. The full record lives on Proof.">
         {feedQ.error ? (
           <p className="border-l-2 border-amber bg-amber/5 px-4 py-2.5 font-mono text-micro text-amber">
@@ -250,7 +332,7 @@ export default function Activity() {
             aria-label="Autopilot"
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full border border-hairline bg-white transition-all ${
+              className={`absolute top-0.5 h-5 w-5 rounded-full border border-hairline bg-ink transition-all ${
                 autopilot ? "left-[22px]" : "left-0.5"
               }`}
             />

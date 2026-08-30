@@ -18,7 +18,7 @@
 ```mermaid
 flowchart TB
     subgraph FE["前端 Next.js (Cloud Run)"]
-        UI["Onboarding / 驾驶舱 / 策略 / Lab / Journal"]
+        UI["/start 向导 / Track / Activity / Proof / System"]
     end
     subgraph BE["后端 FastAPI + ADK (Cloud Run)"]
         subgraph LOOP1["ADK 图 1: TradingLoop（自治交易）"]
@@ -140,8 +140,9 @@ flowchart TB
 ```
 hks30/
 ├─ apps/
-│  ├─ web/               # Next.js 16 前端（Night Voyage UI）+ Dockerfile
-│  │  └─ src/app/        # / 驾驶舱、/onboarding、/research 工作台、/strategies、/journal（/lab → 重定向）
+│  ├─ web/               # Next.js 16 前端（Night Ledger UI，docs/DESIGN.md v4）+ Dockerfile
+│  │  └─ src/app/        # / Track、/activity、/proof、/system、/start 向导
+│  │                     #（旧 /onboarding /research /strategies /journal /lab → 重定向）
 │  └─ api/               # Python 3.12 (uv) + Dockerfile
 │     ├─ northstar/
 │     │  ├─ domain.py    # 全部领域契约（pydantic）

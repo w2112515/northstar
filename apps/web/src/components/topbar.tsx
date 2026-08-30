@@ -87,7 +87,7 @@ function ProgressRuler({ state }: { state: EngineState }) {
   return (
     <div className="hidden items-center gap-2 xl:flex" title={`Plan progress toward ${fmtUsd(target)}`}>
       <div className="h-1 w-24 bg-hairline">
-        <div className="h-full bg-indigo" style={{ width: `${Math.round(progress * 100)}%` }} />
+        <div className="h-full bg-star" style={{ width: `${Math.round(progress * 100)}%` }} />
       </div>
       <span className="font-mono text-micro tabular-nums text-ink2">
         {fmtPct(progress, 0)} → {fmtUsd(target, 0)}

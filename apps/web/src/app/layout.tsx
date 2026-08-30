@@ -19,7 +19,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       translate="no"
       className={`${geistSans.variable} ${geistMono.variable} notranslate h-full antialiased`}
     >
-      <body className="flex min-h-screen flex-col">
+      <body className="starfield flex min-h-screen flex-col">
         <Chrome>{children}</Chrome>
       </body>
     </html>

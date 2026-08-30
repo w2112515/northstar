@@ -1,28 +1,12 @@
 @import "tailwindcss";
 
-/* EVIDENCE v1 - docs/DESIGN.md v3. A light engineering-ledger system:
-   paper, ink, hairlines, stamps. One accent (indigo). AI attribution is a
-   texture (serif italic field notes), never a color.
+/* NIGHT LEDGER v4 - docs/DESIGN.md v4. The evidence ledger moved into the
+   night: the same ruled sections, stamps and serif field notes, set on a
+   deep night-blue plate under a faint starfield. One interactive accent
+   (indigo: links, focus, active states); gold is reserved for star moments
+   only (primary CTA, AI narration, the target and the voyage line).
    Chart/canvas colors must come from lib/theme.ts, which mirrors these. */
 :root {
-  --paper: #faf9f6;
-  --raised: #ffffff;
-  --inset: #f3f1ea;
-  --ink: #16181d;
-  --ink-2: #565d6b;
-  --hairline: #e4e1d8;
-  --indigo: #2b4bd8;
-  --red: #c63b3b;
-  /* green/amber are darkened past WCAG AA 4.5:1 on paper for TEXT use;
-   borders and fills can afford the same deeper tone, so one token each */
-  --green: #17724a;
-  --amber: #8a5a08;
-}
-
-/* The one dark room: the /start wizard. Utilities resolve these vars at
-   runtime, so scoping re-skins every component used inside. The star gold
-   only exists here - it is illegible on paper by design. */
-.start-dark {
   --paper: #0d1420;
   --raised: #131c2e;
   --inset: #0a101b;
@@ -52,7 +36,8 @@
   --font-mono: var(--font-geist-mono);
   --font-serif: Georgia, "Times New Roman", serif;
 
-  /* The six sizes this ledger speaks - docs/DESIGN.md v3 type scale.
+  /* The six sizes this ledger speaks - docs/DESIGN.md type scale (v3,
+     kept verbatim by v4).
      micro:   monospaced uppercase labels, stamps, timestamps
      body:    default copy and table cells
      section: section headings
@@ -94,10 +79,10 @@ body {
   scrollbar-color: var(--hairline) transparent;
 }
 
-/* Starfield: only inside .start-dark (the /start wizard). Fixed positions,
-   no hydration drift. Colors reference the scoped tokens via color-mix so
-   the sync obligation in lib/theme.ts has no silent opt-outs. */
-.start-dark .starfield {
+/* Starfield: the whole app sails at night. Fixed positions, no hydration
+   drift. Colors reference the tokens via color-mix so the sync obligation
+   in lib/theme.ts has no silent opt-outs. */
+.starfield {
   background-image:
     radial-gradient(1px 1px at 8% 18%, color-mix(in srgb, var(--ink) 30%, transparent) 0, transparent 100%),
     radial-gradient(1px 1px at 20% 30%, color-mix(in srgb, var(--star) 45%, transparent) 0, transparent 100%),
@@ -134,7 +119,7 @@ body {
   animation: flash 0.6s ease-out both;
 }
 
-/* The dark room is the cinematic exception: stars may breathe there. */
+/* Stars may breathe: the ship beacon and the target star only. */
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -145,19 +130,19 @@ body {
   50% { opacity: 0.3; }
 }
 
-.start-dark .animate-pulse-slow {
+.animate-pulse-slow {
   animation: pulse-slow 4s ease-in-out infinite;
 }
 
-.start-dark .animate-twinkle {
+.animate-twinkle {
   animation: twinkle 3.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-stamp-in,
   .animate-flash,
-  .start-dark .animate-pulse-slow,
-  .start-dark .animate-twinkle {
+  .animate-pulse-slow,
+  .animate-twinkle {
     animation: none !important;
   }
 }

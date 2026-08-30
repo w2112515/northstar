@@ -1,9 +1,9 @@
 "use client";
 
-/** The signature evidence visual: the actual equity curve (indigo) drawn over
- *  the plan's Monte Carlo cone (p10-p90 fan, p50 dashed), with the target as
- *  a dashed ruled line carrying the small star. Plan vs reality on one axis -
- *  the honest answer to "am I on track, and how do I know". */
+/** The signature visual: the actual equity curve - the voyage line, gold -
+ *  drawn over the plan's Monte Carlo cone (p10-p90 fan, p50 dashed), with
+ *  the target as a dashed gold line carrying the star. Plan vs reality on
+ *  one axis - the honest answer to "am I on track, and how do I know". */
 
 import {
   Area,
@@ -148,7 +148,7 @@ export function TrajectoryHero({
           <Line
             data={actualRows}
             dataKey="equity"
-            stroke={CHART.indigo}
+            stroke={CHART.star}
             strokeWidth={2.25}
             dot={false}
             isAnimationActive={false}
@@ -156,13 +156,13 @@ export function TrajectoryHero({
           {target != null && (
             <ReferenceLine
               y={target}
-              stroke={CHART.indigo}
+              stroke={CHART.star}
               strokeDasharray="6 4"
               strokeWidth={1}
               label={{
                 value: `✦ ${fmtUsd(target, 0)}`,
                 position: "insideTopRight",
-                fill: CHART.indigo,
+                fill: CHART.star,
                 fontSize: 11,
                 fontFamily: "var(--font-geist-mono)",
               }}
@@ -175,7 +175,7 @@ export function TrajectoryHero({
       </ResponsiveContainer>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-micro text-ink2">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-indigo" /> actual equity
+          <span className="inline-block h-0.5 w-4 bg-star" /> actual equity
         </span>
         {usableBands && (
           <>
@@ -229,14 +229,18 @@ export function ProbStrip({
     { v: p90, label: "lucky", strong: false, below: false },
   ];
 
+  // The strip owns its label room: the ruler sits at 40px with the "above"
+  // row (two micro lines ≈ 31px) inside the top margin and the "below" row
+  // inside the bottom one. Nothing may hang outside the h-24 box - that is
+  // how labels used to collide with whatever the caller rendered above.
   return (
     <div className="pt-1">
-      <div className="relative h-16">
-        <div className="absolute inset-x-0 top-6 h-px bg-hairline" />
+      <div className="relative h-24">
+        <div className="absolute inset-x-0 top-10 h-px bg-hairline" />
         {ticks.map((t) => (
           <div key={t.label} className="absolute top-0" style={{ left: x(t.v) }}>
             {!t.below && (
-              <div className="absolute bottom-5 left-0 -translate-x-1/2 text-center">
+              <div className="absolute left-0 top-0 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
@@ -244,12 +248,12 @@ export function ProbStrip({
               </div>
             )}
             <div
-              className={`absolute left-0 top-6 w-px -translate-x-1/2 ${
+              className={`absolute left-0 top-10 w-px -translate-x-1/2 ${
                 t.strong ? "h-3.5 -translate-y-1 bg-ink" : "h-2.5 bg-ink2/60"
               }`}
             />
             {t.below && (
-              <div className="absolute left-0 top-8 -translate-x-1/2 text-center">
+              <div className="absolute left-0 top-14 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
@@ -259,9 +263,9 @@ export function ProbStrip({
           </div>
         ))}
         {target != null && (
-          <div className="absolute top-0 -translate-x-1/2" style={{ left: x(target) }}>
-            <div className="text-center font-mono text-micro font-semibold text-indigo">✦</div>
-            <div className="h-3 w-px translate-y-2.5 bg-indigo" />
+          <div className="absolute top-4 -translate-x-1/2" style={{ left: x(target) }}>
+            <div className="text-center font-mono text-micro font-semibold text-star">✦</div>
+            <div className="mx-auto h-3 w-px translate-y-2.5 bg-star" />
           </div>
         )}
       </div>

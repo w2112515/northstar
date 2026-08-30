@@ -26,7 +26,7 @@ Gemini** for orchestration and judgment, and **Alpaca** for real (paper) options
    market-weather floor, kill switch). Every rejection is a first-class journal
    record with a reason code. Closing orders are recognized (`meta.closing`)
    and never blocked by new-risk rules — only the kill switch outranks an exit.
-   The cockpit has a per-position Close button (options close as their whole
+   The Track page has a per-position Close button (options close as their whole
    structure — never a naked leg left behind), and even that manual order
    passes through the gate. Underneath: one global pass mutex, atomic approval
    decisions, idempotent `client_order_id`s at the broker, and a fill
@@ -37,8 +37,9 @@ Gemini** for orchestration and judgment, and **Alpaca** for real (paper) options
    deflated by the Bailey/López de Prado expected-max-Sharpe haircut) →
    **a human approves** → a 3-day small-allocation paper trial → promotion only
    after a clean window. Full lineage: parent version, hypothesis, experiment.
-5. **Everything explains itself.** The Voyage Journal is an append-only lineage
-   of proposal → verdict → order → fill → realized P&L → digest, in plain English.
+5. **Everything explains itself.** The journal (the **Proof** page) is an
+   append-only lineage of proposal → verdict → order → fill → realized P&L →
+   digest, in plain English.
 6. **It runs the boring hours too.** Options exit manager (50% profit take,
    DTE≤7 step-out, spreads closed as one atomic multi-leg order), approval
    timeouts that actually auto-reject, and a night watch that settles trials,
@@ -70,7 +71,7 @@ Gemini** for orchestration and judgment, and **Alpaca** for real (paper) options
 ```mermaid
 flowchart LR
     subgraph GCP["Google Cloud Run"]
-        WEB["Next.js — Night Voyage UI<br/>cockpit / onboarding / lab / journal"]
+        WEB["Next.js — Night Ledger UI<br/>Track / Activity / Proof / System / start"]
         subgraph API["FastAPI + ADK 2.x (max-instances 1)"]
             LOOP["TradingLoop graph<br/>perceive → prefilter → triage → signals<br/>→ compile → GATE → execute → explain → record"]
             EVO["Evolution loop<br/>walk-forward → deflated Sharpe<br/>→ human approval → paper trial"]
@@ -113,17 +114,19 @@ proposes and narrates; it holds no order tools.
   recomputed nightly from live equity.
 - **Market weather:** 3-source 0-100 index (SPY realized vol, Alpaca headline
   tone, GDELT global tone) gates NEW risk in storms; validated by an honest
-  walk-forward study on the Research workbench (vol proxy, labeled). Also exposed as an
+  walk-forward study on the System page (vol proxy, labeled). Also exposed as an
   **A2A agent** (`/a2a/weather/.well-known/agent-card.json`): any A2A client
   can discover it and query the exact reading our risk gate consumes —
   deterministic, no LLM per query.
 - **TimesFM forecasts:** Google's time-series foundation model (zero-shot)
   draws 5-day quantile bands (q10/q50/q90) for every traded symbol nightly.
-  Decision support only — it feeds the AI analyst's fact sheet and a cockpit
-  fan chart, never an order trigger.
+  Decision support only — it feeds the AI analyst's fact sheet, the forecast
+  bands on the Activity market chart and the scorecard fan on Proof, never an
+  order trigger.
 - **Glass-box passes:** every ADK pass journals a node-by-node trace (wall
-  time per node, which nodes used Gemini vs template); the cockpit renders the
-  live workflow graph — agentic UX means you can audit the loop, not trust it.
+  time per node, which nodes used Gemini vs template); the Activity page
+  renders the live run schematic — agentic UX means you can audit the loop,
+  not trust it.
 - **HITL:** soft breaker / cooldown / storm weather / evolution promotions
   create approval cards; pending ones expire to auto-reject on a timer. The
   loop never blocks on a human.
@@ -131,15 +134,16 @@ proposes and narrates; it holds no order tools.
   broker-reported equity plus the journal's realized-P&L attribution; the
   night watch also files a one-page markdown daily report (equity, trades,
   regime, scout highlights, captain's log) at `GET /api/report/daily`.
-- **Research flywheel surfaces:** the Research workbench has four tabs —
-  Radar (Scout report with options watch + Captain's log), Compass (regime
-  badge, weather line, conditional per-family stats, Advisor adopt/dismiss,
-  TimesFM forecast), Evolution (evolution rounds, promotion candidates,
-  weather-floor validation, DSL Shipyard), Mining (Factor radar rank-IC table
-  + Factor mine with library decay flags); tabs show an amber dot when a
-  decision waits. The cockpit keeps a compact overnight-research digest in
-  the rail (goes gold when helm advice waits); the ribbon shows a regime
-  chip. Every loop degrades honestly and can be disabled per-flag (see
+- **Research flywheel surfaces (Night Ledger IA):** **Activity** carries the
+  Scout report (Top-K table with plain-English reasons, options-watch line,
+  Scan now) plus a regime/weather context strip and the live run schematic
+  with its scout/weather/TimesFM satellites; **Track** carries the daily
+  brief (Captain's-log narration as a labeled field note) and the Needs-you
+  block where Advisor tilts and evolution promotions wait for your call;
+  **System** carries evolution rounds, the DSL Shipyard, factor mining with
+  library decay flags, weather-floor validation and per-family regime stats;
+  **Proof** carries the forecast scorecard and gate-rejection statistics.
+  Every loop degrades honestly and can be disabled per-flag (see
   `.env.example`).
 
 ## Run it
@@ -159,7 +163,7 @@ cd apps/web; npm install; cd ../..
 
 # smoke test + one full loop pass
 .\scripts\smoke.ps1
-# then in the UI: Cockpit -> Helm -> "Run one pass now"
+# then in the UI: Activity -> Controls -> "Run one pass now"
 ```
 
 Tests: `cd apps/api; uv run pytest` (risk gate, compiler, copy-honesty lint).
