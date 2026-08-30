@@ -70,7 +70,7 @@ const RISK_QUESTIONS = [
 const LEVELS = ["conservative", "balanced", "aggressive"] as const;
 
 const INPUT_CLS =
-  "w-full rounded-sm border border-hairline bg-inset px-3 py-2 text-body text-ink transition-colors focus:border-indigo/60";
+  "w-full rounded-lg border border-hairline bg-inset px-3 py-2 text-body text-ink transition-colors focus:border-indigo/60";
 
 function StepTitle({ children, sub }: { children: string; sub?: string }) {
   return (
@@ -352,7 +352,7 @@ export default function Start() {
                 </div>
               </div>
             ))}
-            <div className="mb-4 border border-hairline bg-inset p-3 text-body">
+            <div className="panel-inset mb-4 p-3 text-body">
               Your temperament:{" "}
               <span className="font-mono font-semibold text-star">{risk}</span>
               <span className="ml-2 text-body text-ink2">
@@ -381,7 +381,7 @@ export default function Start() {
               <StepTitle sub="Simulated on historical returns. An estimate, never a promise.">
                 Step 3 - The honest plan
               </StepTitle>
-              <div className="flex flex-wrap items-end justify-between gap-4 border border-hairline bg-raised px-5 py-4">
+              <div className="panel-inset flex flex-wrap items-end justify-between gap-4 px-5 py-4">
                 <div>
                   <div className="font-mono text-micro uppercase tracking-[0.12em] text-ink2">
                     Estimated odds of reaching
@@ -403,7 +403,7 @@ export default function Start() {
                 </div>
               </div>
 
-              <div className="mt-4 h-56 border border-hairline bg-inset px-2 py-2">
+              <div className="panel-inset mt-4 h-56 px-2 py-2">
                 <ResponsiveContainer>
                   <AreaChart data={chartData} margin={{ left: 8, right: 8, top: 8 }}>
                     <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
@@ -458,7 +458,7 @@ export default function Start() {
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {preview.plan.allocations.map((a) => (
-                  <div key={a.strategy_id} className="border border-hairline bg-raised p-3">
+                  <div key={a.strategy_id} className="panel-inset p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-body font-medium capitalize">{a.strategy_id.replace("_", " ")}</span>
                       <span className="font-mono text-section font-semibold text-star">
@@ -478,7 +478,7 @@ export default function Start() {
                 <li>· Kill switch is always one click away</li>
               </ul>
               {preview.plan.baseline_note && (
-                <p className="mt-3 border border-hairline bg-inset p-3 text-body leading-relaxed text-ink2">
+                <p className="panel-inset mt-3 p-3 text-body leading-relaxed text-ink2">
                   {preview.plan.baseline_note}
                 </p>
               )}

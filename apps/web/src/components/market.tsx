@@ -302,7 +302,7 @@ export function MarketPanel({
             </div>
           </div>
         )}
-        <div className="min-w-0 flex-1 border border-hairline bg-inset px-2 py-2">
+        <div className="panel-inset min-w-0 flex-1 px-2 py-2">
           {inSync && err ? (
             <p className="py-10 text-center text-body text-ink2">{err}</p>
           ) : !inSync || bars.length === 0 ? (

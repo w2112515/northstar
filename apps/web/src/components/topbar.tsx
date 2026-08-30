@@ -86,8 +86,8 @@ function ProgressRuler({ state }: { state: EngineState }) {
   );
   return (
     <div className="hidden items-center gap-2 xl:flex" title={`Plan progress toward ${fmtUsd(target)}`}>
-      <div className="h-1 w-24 bg-hairline">
-        <div className="h-full bg-star" style={{ width: `${Math.round(progress * 100)}%` }} />
+      <div className="h-1 w-24 overflow-hidden rounded-full bg-hairline">
+        <div className="h-full rounded-full bg-star" style={{ width: `${Math.round(progress * 100)}%` }} />
       </div>
       <span className="font-mono text-micro tabular-nums text-ink2">
         {fmtPct(progress, 0)} → {fmtUsd(target, 0)}
@@ -115,16 +115,19 @@ export function TopBar() {
   const needsYou = approvals + advisorPending;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-hairline bg-paper/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-hairline bg-raised/85 backdrop-blur-md">
       <div className="mx-auto flex h-12 max-w-6xl items-center gap-5 px-4 sm:px-6">
         <Link href="/" className="flex items-baseline gap-2">
+          <span className="text-body text-star" aria-hidden>
+            ✦
+          </span>
           <span className="text-section font-semibold tracking-tight">NorthStar</span>
           <span className="hidden font-mono text-micro uppercase tracking-[0.14em] text-ink2 xl:inline">
             goal-first paper trading
           </span>
         </Link>
 
-        <nav className="flex items-center gap-0.5">
+        <nav className="flex items-center gap-1">
           {NAV.map((n) => {
             const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
             return (
@@ -132,12 +135,15 @@ export function TopBar() {
                 key={n.href}
                 href={n.href}
                 aria-current={active ? "page" : undefined}
-                className={`-mb-px border-b-2 px-2.5 py-1 text-body transition-colors ${
+                className={`relative rounded-md px-2.5 py-1 text-body transition-colors ${
                   active
-                    ? "border-indigo font-medium text-ink"
-                    : "border-transparent text-ink2 hover:text-ink"
+                    ? "bg-inset font-medium text-ink"
+                    : "text-ink2 hover:bg-inset/60 hover:text-ink"
                 }`}
               >
+                {active && (
+                  <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 rounded-full bg-indigo" />
+                )}
                 {n.label}
               </Link>
             );
@@ -147,6 +153,9 @@ export function TopBar() {
         <div className="ml-auto flex items-center gap-4">
           {state && (
             <span className="flex items-baseline gap-2">
+              <span className="hidden font-mono text-micro uppercase tracking-[0.14em] text-ink2 md:inline">
+                Equity
+              </span>
               <span className="font-mono text-body font-semibold tabular-nums">
                 {fmtUsd(state.account.equity, 0)}
               </span>

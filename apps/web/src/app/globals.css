@@ -150,8 +150,9 @@ body {
   100% { background-position: 200% 0; }
 }
 
+/* dash cycle below is 8 units (3 on, 5 off); -16 = two clean cycles */
 @keyframes orbit-dash {
-  to { stroke-dashoffset: -18; }
+  to { stroke-dashoffset: -16; }
 }
 
 .animate-stamp-in {

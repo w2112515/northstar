@@ -2,8 +2,8 @@
 
 /** Evidence-layer agent visuals: the live run schematic (the real ADK
  *  workflow, drawn as a lab schematic), the AI debate record, and the
- *  TimesFM forecast fan. Light ledger styling; AI attribution is
- *  typographic (serif italic "Ai" tag), never a color. */
+ *  TimesFM forecast fan. Night panel styling; AI attribution is
+ *  typographic (serif italic "Ai" tag), deterministic code is teal. */
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -63,7 +63,7 @@ function StageNode({ data }: NodeProps) {
   // l/t/bt/tr. Edges must reference a handle of the matching type or xyflow
   // silently drops them.
   return (
-    <div className={`w-48 rounded-sm border px-3 py-2 transition-colors duration-150 ${STATUS_CLASS[d.status]}`}>
+    <div className={`w-48 rounded-lg border px-3 py-2 transition-colors duration-150 ${STATUS_CLASS[d.status]}`}>
       <Handle type="target" position={Position.Left} id="l" className={hidden} />
       <Handle type="target" position={Position.Top} id="t" className={hidden} />
       <Handle type="target" position={Position.Bottom} id="bt" className={hidden} />
@@ -73,13 +73,13 @@ function StageNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Left} id="sl" className={hidden} />
       <div className="flex items-center gap-1.5 text-body font-medium text-ink">
         {d.status === "running" && (
-          <span className="h-1.5 w-1.5 bg-indigo" />
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo" />
         )}
         <span className="truncate">{d.label}</span>
         {d.tag && (
           <span
             className={`ml-auto shrink-0 text-micro font-bold tracking-wide ${
-              d.tag === "AI" ? "font-serif italic text-ink" : "font-mono text-ink2"
+              d.tag === "AI" ? "font-serif italic text-ink" : "font-mono text-teal"
             }`}
           >
             {d.tag === "AI" ? "Ai" : "CODE"}
@@ -365,7 +365,7 @@ export function RunSchematic({
       </div>
       {/* Small screens scroll the schematic horizontally at a readable zoom
           instead of shrinking 960px of graph into ant-sized labels. */}
-      <div className="overflow-x-auto border border-hairline bg-inset">
+      <div className="panel-inset overflow-x-auto">
         <div className="h-[340px] min-w-[880px] sm:h-[400px] [&_.react-flow__attribution]:!bg-transparent [&_.react-flow__attribution]:!text-micro [&_.react-flow__attribution]:!text-ink2">
           <ReactFlow
             nodes={nodes}
@@ -430,7 +430,7 @@ export function DebatePanel({ debate, ts }: { debate: Debate | null; ts?: string
         </FieldNote>
       </div>
       {(debate.headlines?.length ?? 0) > 0 && (
-        <div className="mt-3 border border-hairline bg-inset px-3 py-2.5">
+        <div className="panel-inset mt-3 px-3 py-2.5">
           <div className="mb-1 font-mono text-micro font-semibold uppercase tracking-[0.12em] text-ink2">
             Fresh headlines the critic saw (advocate didn&apos;t)
           </div>
@@ -487,7 +487,7 @@ export function ForecastFan({
               key={s}
               onClick={() => setSel(s)}
               aria-pressed={s === active}
-              className={`border px-2 py-0.5 font-mono text-micro transition-colors ${
+              className={`rounded-md border px-2 py-0.5 font-mono text-micro transition-colors ${
                 s === active
                   ? "border-ink/50 bg-inset font-semibold text-ink"
                   : "border-hairline text-ink2 hover:text-ink"
@@ -509,7 +509,7 @@ export function ForecastFan({
       ) : (
         f && (
           <>
-            <div className="h-44 border border-hairline bg-inset px-2 py-2">
+            <div className="panel-inset h-44 px-2 py-2">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
                   <XAxis dataKey="day" tick={AXIS_TICK} tickLine={false} axisLine={false} />

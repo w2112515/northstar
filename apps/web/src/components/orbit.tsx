@@ -87,13 +87,14 @@ export function GoalOrbit({
         />
       ))}
 
-      {/* remaining leg: dashed hairline */}
+      {/* remaining leg: dashed hairline, drifting toward the star */}
       <path
         d={ARC_D}
         fill="none"
         stroke={CHART.hairline}
         strokeWidth={1.5}
         strokeDasharray="3 5"
+        className="animate-orbit-dash"
       />
       {/* sailed leg: soft glow under a solid star-gold line */}
       <path

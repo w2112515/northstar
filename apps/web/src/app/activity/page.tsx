@@ -119,7 +119,7 @@ export default function Activity() {
   }, [positions, forecastDoc, scout]);
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
       <PageHeader
         title="Activity"
         sub="What the system is doing right now - every pass, every check, every fill."
@@ -342,7 +342,7 @@ export default function Activity() {
           <button
             onClick={() => act("tick", () => apiPost("/api/loop/tick", { reason: "manual" }))}
             disabled={busy !== ""}
-            className="border border-hairline bg-raised px-4 py-2 text-body text-ink transition-colors hover:border-ink/40 disabled:opacity-40"
+            className="rounded-lg border border-hairline bg-inset px-4 py-2 text-body text-ink transition-colors hover:border-ink/40 disabled:opacity-40"
           >
             {busy === "tick" ? "Running one pass…" : "Run one pass now"}
           </button>

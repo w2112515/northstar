@@ -109,7 +109,7 @@ export default function Proof() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
       <PageHeader
         title="Proof"
         sub="Every proposal, every gate verdict (including rejections), every order and fill - on record, unedited."
@@ -143,7 +143,7 @@ export default function Proof() {
             aria-label="Search ledger entries"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="ml-auto w-56 rounded-sm border border-hairline bg-raised px-3 py-1.5 font-mono text-body"
+            className="ml-auto w-56 rounded-lg border border-hairline bg-inset px-3 py-1.5 font-mono text-body"
           />
         </div>
 
@@ -195,7 +195,7 @@ export default function Proof() {
                               </span>
                             ))}
                         </div>
-                        <pre className="mt-2 max-h-72 overflow-auto border border-hairline bg-inset p-3 font-mono text-micro leading-relaxed text-ink2">
+                        <pre className="panel-inset mt-2 max-h-72 overflow-auto p-3 font-mono text-micro leading-relaxed text-ink2">
                           {JSON.stringify(e.payload, null, 2)}
                         </pre>
                       </div>
@@ -210,7 +210,7 @@ export default function Proof() {
           <div className="mt-4 text-center">
             <button
               onClick={() => setLimit((n) => n + 500)}
-              className="border border-hairline px-4 py-2 font-mono text-micro text-ink2 transition-colors hover:border-ink/40 hover:text-ink"
+              className="rounded-lg border border-hairline px-4 py-2 font-mono text-micro text-ink2 transition-colors hover:border-ink/40 hover:text-ink"
             >
               Load older entries (showing {events.length})
             </button>

@@ -138,22 +138,22 @@ export default function Track() {
   const needsYou = approvals.length > 0 || !!advice;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
       <h1 className="sr-only">Track - plan progress and account state</h1>
       {err && (
-        <div className="border-l-2 border-amber bg-amber/5 px-4 py-2.5 text-body text-amber">
+        <div className="rounded-r-lg border-l-2 border-amber bg-amber/5 px-4 py-2.5 text-body text-amber">
           {err}
         </div>
       )}
       {state.kill_switch && (
-        <div className="border-l-2 border-red bg-red/5 px-4 py-3 text-body text-red">
+        <div className="rounded-r-lg border-l-2 border-red bg-red/5 px-4 py-3 text-body text-red">
           Kill switch is ON - no new trades will be placed until you turn it off. Controls live
           under <Link href="/activity" className="underline">Activity</Link>.
         </div>
       )}
       {breaker && !state.kill_switch && (
         <div
-          className={`border-l-2 px-4 py-3 text-body ${
+          className={`rounded-r-lg border-l-2 px-4 py-3 text-body ${
             breaker === "hard" ? "border-red bg-red/5 text-red" : "border-amber bg-amber/5 text-amber"
           }`}
         >
@@ -164,7 +164,7 @@ export default function Track() {
       )}
 
       {/* ---------------------------------------------------------- hero */}
-      <section className="grid gap-8 lg:grid-cols-[minmax(300px,380px)_1fr] lg:items-start">
+      <section className="panel grid gap-6 px-6 py-5 lg:grid-cols-[minmax(300px,380px)_1fr] lg:items-start">
         <div>
           <div className="font-mono text-micro uppercase tracking-[0.14em] text-ink2">
             Portfolio equity · paper account
@@ -209,7 +209,7 @@ export default function Track() {
               equity={equityCurve}
             />
           ) : (
-            <div className="border border-hairline px-6 py-8">
+            <div className="py-2">
               <h2 className="text-page font-semibold">Set your North Star</h2>
               <p className="mt-1 max-w-xl text-body text-ink2">
                 Tell us the destination - &quot;grow $100k to $110k in a year&quot; - and we&apos;ll
@@ -235,7 +235,7 @@ export default function Track() {
         >
           <div className="grid gap-3 md:grid-cols-2">
             {approvals.map((a) => (
-              <div key={a.id} className="border border-hairline bg-raised p-4">
+              <div key={a.id} className="panel-inset animate-feed-in p-4">
                 <div className="flex items-center justify-between gap-2">
                   <Stamp tone="amber">needs you</Stamp>
                   <span className="font-mono text-micro text-ink2">{fmtTs(a.created_at)}</span>
@@ -265,7 +265,7 @@ export default function Track() {
               </div>
             ))}
             {advice && (
-              <div className="border border-hairline bg-raised p-4">
+              <div className="panel-inset animate-feed-in p-4">
                 <div className="flex items-center justify-between gap-2">
                   <Stamp tone="amber">needs you</Stamp>
                   <span className="font-mono text-micro text-ink2">{fmtTs(advice.ts)}</span>
@@ -427,13 +427,13 @@ export default function Track() {
                             <button
                               onClick={() => closePosition(p.symbol)}
                               disabled={busy === `close:${p.symbol}`}
-                              className="border border-red bg-red/5 px-2 py-0.5 font-mono text-micro font-medium text-red transition-colors hover:bg-red/10 disabled:opacity-50"
+                              className="rounded-md border border-red bg-red/5 px-2 py-0.5 font-mono text-micro font-medium text-red transition-colors hover:bg-red/10 disabled:opacity-50"
                             >
                               {busy === `close:${p.symbol}` ? "Closing…" : "Confirm"}
                             </button>
                             <button
                               onClick={() => setCloseArm("")}
-                              className="border border-hairline px-2 py-0.5 font-mono text-micro text-ink2 hover:text-ink"
+                              className="rounded-md border border-hairline px-2 py-0.5 font-mono text-micro text-ink2 hover:text-ink"
                             >
                               Keep
                             </button>
@@ -442,7 +442,7 @@ export default function Track() {
                           <button
                             onClick={() => setCloseArm(p.symbol)}
                             disabled={!!busy}
-                            className="border border-hairline px-2 py-0.5 font-mono text-micro text-ink2 transition-colors hover:border-red/60 hover:text-red disabled:opacity-40"
+                            className="rounded-md border border-hairline px-2 py-0.5 font-mono text-micro text-ink2 transition-colors hover:border-red/60 hover:text-red disabled:opacity-40"
                           >
                             Close
                           </button>

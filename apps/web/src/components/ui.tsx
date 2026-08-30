@@ -1,14 +1,15 @@
 import { ReactNode, useState } from "react";
 
-/* Night Ledger primitives - docs/DESIGN.md v4.
-   Ruled sections instead of card waterfalls; stamps for verdicts; field
-   notes for AI attribution. Indigo for interaction, gold for star moments
-   only (primary CTA / FieldNote / the target), hairlines for structure. */
+/* Night Ledger primitives - docs/DESIGN.md v4.1.
+   Rounded panels lifted off the void (prototype texture) carrying the
+   ledger's grammar: kicker headers, stamps for verdicts, field notes for
+   AI attribution. Indigo for interaction, teal for deterministic code,
+   gold for star moments only (primary CTA / FieldNote / the target). */
 
 // ------------------------------------------------------------------ Section
 
-/** The base layout unit: a hairline top rule + micro mono label + content
- *  sitting directly on the paper. Replaces the old bordered Card. */
+/** The base layout unit: a rounded panel with a kicker header. The ring is
+ *  a shadow (.panel), so nested content never shifts by a border width. */
 export function Section({
   title,
   hint,
@@ -19,19 +20,19 @@ export function Section({
   id,
 }: {
   title: string;
-  /** right-aligned micro note on the section rule */
+  /** right-aligned micro note on the header row */
   hint?: string;
   /** full explainer behind a hover/focus ⓘ */
   info?: string;
-  /** section-level actions, right-aligned on the rule */
+  /** section-level actions, right-aligned on the header row */
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
   id?: string;
 }) {
   return (
-    <section id={id} className={className}>
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline pb-3 pt-2">
+    <section id={id} className={`panel px-5 py-4 ${className}`}>
+      <div className="flex flex-wrap items-center gap-1.5 pb-3">
         <h2 className="font-mono text-micro font-semibold uppercase tracking-[0.14em] text-ink2">
           {title}
         </h2>
@@ -71,19 +72,20 @@ function InfoNote({ text }: { text: string }) {
 
 export type StampTone = "red" | "green" | "amber" | "indigo" | "plain";
 
-/** A verdict stamp: rectangular, bordered, monospaced uppercase. The visual
- *  signature of the ledger - decisions look like they were stamped. */
+/** A verdict stamp: bordered chip, monospaced uppercase, faint tone wash.
+ *  The visual signature of the ledger - decisions look like they were
+ *  stamped. */
 export function Stamp({ children, tone = "plain" }: { children: ReactNode; tone?: StampTone }) {
   const cls = {
-    red: "border-red/70 text-red",
-    green: "border-green/70 text-green",
-    amber: "border-amber/70 text-amber",
-    indigo: "border-indigo/70 text-indigo",
-    plain: "border-ink2/40 text-ink2",
+    red: "border-red/60 bg-red/10 text-red",
+    green: "border-green/60 bg-green/10 text-green",
+    amber: "border-amber/60 bg-amber/10 text-amber",
+    indigo: "border-indigo/60 bg-indigo/10 text-indigo",
+    plain: "border-ink2/30 bg-inset/60 text-ink2",
   }[tone];
   return (
     <span
-      className={`inline-flex shrink-0 items-center border bg-transparent px-1.5 py-px font-mono text-micro font-semibold uppercase tracking-[0.12em] ${cls}`}
+      className={`inline-flex shrink-0 items-center rounded-[5px] border px-1.5 py-px font-mono text-micro font-semibold uppercase tracking-[0.12em] ${cls}`}
     >
       {children}
     </span>
@@ -151,7 +153,7 @@ export function FieldNote({
   children: ReactNode;
 }) {
   return (
-    <figure className="border-l-2 border-star/40 bg-star/[0.05] px-4 py-3">
+    <figure className="rounded-r-xl border-l-2 border-star/40 bg-star/[0.06] px-4 py-3">
       <blockquote className="font-serif text-body italic leading-relaxed text-ink/90">
         {children}
       </blockquote>
@@ -218,7 +220,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-sm px-4 py-2 text-body transition-colors ${styles} ${className}`}
+      className={`rounded-lg px-4 py-2 text-body transition-colors ${styles} ${className}`}
     >
       {children}
     </button>
@@ -227,11 +229,12 @@ export function Button({
 
 // ---------------------------------------------------------------- PaperTag
 
-/** Always visible: this is practice money. Amber = waiting/attention class. */
+/** Always visible: this is practice money. A gold-ringed pill, the one
+ *  permanent honesty mark in the chrome. */
 export function PaperTag() {
   return (
     <span
-      className="inline-flex items-center gap-1.5 border border-amber/70 bg-amber/10 px-2 py-0.5 font-mono text-micro font-semibold uppercase tracking-[0.12em] text-amber"
+      className="inline-flex items-center gap-1.5 rounded-full border border-star/60 bg-star/10 px-2.5 py-0.5 font-mono text-micro font-semibold uppercase tracking-[0.14em] text-star"
       title="Practice account with simulated money. No real dollars are at risk."
     >
       PAPER
@@ -254,15 +257,15 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
 
 // ----------------------------------------------------------------- Skeleton
 
-/** Static ruled lines while the first fetch lands - no pulsing, a ledger
- *  does not shimmer. */
+/** Shimmering inset bars while the first fetch lands (prototype .skel);
+ *  static under prefers-reduced-motion. */
 export function Skeleton({ rows = 3, className = "" }: { rows?: number; className?: string }) {
   return (
     <div className={`space-y-2.5 ${className}`} aria-hidden>
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className="h-3.5 bg-hairline/60"
+          className="skel h-3.5"
           style={{ width: `${88 - ((i * 17) % 40)}%` }}
         />
       ))}

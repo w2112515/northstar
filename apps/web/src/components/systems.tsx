@@ -140,7 +140,7 @@ export function EvolutionSection() {
       {pending.length > 0 && (
         <div className="mb-5 grid gap-3 md:grid-cols-2">
           {pending.map((e) => (
-            <div key={e.id} className="border border-hairline bg-raised p-4">
+            <div key={e.id} className="panel-inset p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Stamp tone="amber">promotion candidate</Stamp>
                 <span className="font-mono text-micro text-ink2">{e.family.replace(/_/g, " ")}</span>
@@ -181,7 +181,7 @@ export function EvolutionSection() {
       {designed.length > 0 && (
         <ul className="mb-5 space-y-2">
           {designed.map((e) => (
-            <li key={e.id} className="border border-hairline bg-raised px-3 py-2.5">
+            <li key={e.id} className="panel-inset px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <Stamp tone={STATUS_STAMP[e.status]?.tone ?? "plain"}>{e.status.replace("_", " ")}</Stamp>
                 {e.proposed_by === "gemini" && (
@@ -395,7 +395,7 @@ export function MiningSection() {
       )}
 
       {pendingCandidates.map((c) => (
-        <div key={c.id} className="mt-3 border border-hairline bg-raised p-3">
+        <div key={c.id} className="panel-inset mt-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Stamp tone="amber">awaiting approval</Stamp>
             <span className="font-mono text-body">{c.name}</span>

@@ -70,7 +70,7 @@ export default function System() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
       <PageHeader
         title="System"
         sub="The machinery: what strategies exist, what is running, and what the system is learning."
