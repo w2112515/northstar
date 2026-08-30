@@ -241,10 +241,12 @@ export default function Track() {
                   <span className="font-mono text-micro text-ink2">{fmtTs(a.created_at)}</span>
                 </div>
                 <div className="mt-2.5 text-body">{a.order_plan.human}</div>
-                <div className="mt-1 text-body text-ink2">
-                  Why it paused:{" "}
-                  {a.verdict.reason_codes.map((c) => c.replace(/_/g, " ")).join(", ")} · worst case{" "}
-                  {fmtUsd(a.order_plan.est_max_loss)}
+                <div className="mt-1 text-micro leading-relaxed text-amber">
+                  Why it paused: {a.verdict.reason_codes.map((c) => c.replace(/_/g, " ")).join(", ")}.
+                  The gate held it for you.
+                </div>
+                <div className="mt-0.5 font-mono text-micro tabular-nums text-red">
+                  Worst case −{fmtUsd(a.order_plan.est_max_loss)}
                 </div>
                 <div className="mt-3 flex gap-2">
                   <Button
@@ -427,6 +429,7 @@ export default function Track() {
                             <button
                               onClick={() => closePosition(p.symbol)}
                               disabled={busy === `close:${p.symbol}`}
+                              title="Sells the whole position at market."
                               className="rounded-md border border-red bg-red/5 px-2 py-0.5 font-mono text-micro font-medium text-red transition-colors hover:bg-red/10 disabled:opacity-50"
                             >
                               {busy === `close:${p.symbol}` ? "Closing…" : "Confirm"}
@@ -442,6 +445,7 @@ export default function Track() {
                           <button
                             onClick={() => setCloseArm(p.symbol)}
                             disabled={!!busy}
+                            title="Sells at market. If the market is closed, it queues until the open."
                             className="rounded-md border border-hairline px-2 py-0.5 font-mono text-micro text-ink2 transition-colors hover:border-red/60 hover:text-red disabled:opacity-40"
                           >
                             Close

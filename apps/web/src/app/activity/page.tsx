@@ -337,7 +337,12 @@ export default function Activity() {
               }`}
             />
           </button>
-          <span className="text-body">Autopilot {autopilot ? "on" : "off"}</span>
+          <span
+            className="text-body"
+            title="Passes run on their own. Paused tickets still wait on you."
+          >
+            Autopilot {autopilot ? "on" : "off"}
+          </span>
 
           <button
             onClick={() => act("tick", () => apiPost("/api/loop/tick", { reason: "manual" }))}
@@ -350,13 +355,16 @@ export default function Activity() {
           <button
             onClick={() => act("kill", () => apiPost("/api/engine/kill-switch", { on: !state?.kill_switch }))}
             disabled={busy !== "" || !state}
-            className="ml-auto border border-red/60 px-4 py-2 text-body text-red transition-colors hover:bg-red/5 disabled:opacity-40"
+            title="Stops all trading immediately. Only you can restart it."
+            className="ml-auto rounded-lg border border-red/60 px-4 py-2 text-body text-red transition-colors hover:bg-red/5 disabled:opacity-40"
           >
             {state?.kill_switch ? "Release kill switch" : "Kill switch - stop everything"}
           </button>
         </div>
         <p className="mt-2 font-mono text-micro text-ink2">
-          Market {state?.clock.is_open ? "is open" : "closed - orders queue to next open"}.
+          {state?.clock.is_open
+            ? "Market is open."
+            : "Market closed - approved tickets queue until the open."}
         </p>
       </Section>
     </div>
