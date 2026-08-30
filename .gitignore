@@ -21,6 +21,9 @@ npm-debug.log*
 data/
 *.jsonl.tmp
 
+# audit screenshots (regenerate with scripts/capture-ui.mjs)
+artifacts/
+
 # design reference only - the Grok App Builder prototype (docs/DESIGN.md v4.1
 # visual spec source); never part of the build
 THhdE8o3NRn9RAPU-grok-workspace/

@@ -1,168 +1,193 @@
-/** GoalOrbit - the promise visual: an arc from the capital you start with to
- *  the target you picked, drawn under a small starfield. Since v4.1 it is
- *  the Track hero as well as the /start opener (the prototype's DESTINATION
- *  composition). Pure SVG; deterministic star positions so server and client
- *  renders never disagree. Colors: CHART. */
+/** GoalOrbit - the ring edition, matching the approved prototype screenshots
+ *  (onboarding + pass/kill cockpit states): an elliptical gold dashed ring on
+ *  the starfield, the sailed arc glowing teal-to-gold, the breathing ship at
+ *  the current position, the North Star at the destination. Pure SVG,
+ *  deterministic geometry; no hydration drift. */
 
+import { useMemo } from "react";
 import { fmtUsd } from "@/lib/api";
-import { CHART } from "@/lib/theme";
 
-const W = 520;
-const H = 200;
+const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
-// Arc control points: depart low-left, arrive high-right at the star.
-const P0 = { x: 42, y: 166 };
-const P1 = { x: 250, y: 22 };
-const P2 = { x: 474, y: 58 };
-
-function pointAt(t: number) {
-  const u = 1 - t;
-  return {
-    x: u * u * P0.x + 2 * u * t * P1.x + t * t * P2.x,
-    y: u * u * P0.y + 2 * u * t * P1.y + t * t * P2.y,
-  };
+function compactMoney(n: number) {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000) return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
+  return fmtUsd(n, abs >= 1000 ? 0 : 2);
 }
 
-const ARC_D = `M ${P0.x} ${P0.y} Q ${P1.x} ${P1.y} ${P2.x} ${P2.y}`;
-
-// Four-point star, centered on origin, radius ~11.
-const STAR_D =
-  "M 0 -11 L 2.8 -2.8 L 11 0 L 2.8 2.8 L 0 11 L -2.8 2.8 L -11 0 L -2.8 -2.8 Z";
-
-// Deterministic starfield: [x, y, r, twinkleDelaySec | null]
-const STARS: [number, number, number, number | null][] = [
-  [30, 40, 1, null],
-  [88, 96, 0.8, 0.4],
-  [130, 30, 1.2, null],
-  [168, 130, 0.8, null],
-  [205, 66, 1, 1.2],
-  [262, 108, 0.8, null],
-  [300, 36, 1.1, 2.1],
-  [338, 140, 0.9, null],
-  [372, 84, 1, 0.8],
-  [410, 30, 0.8, null],
-  [440, 130, 1.1, 1.6],
-  [500, 120, 0.9, 2.8],
-  [70, 140, 0.7, null],
-  [230, 170, 0.8, null],
-  [490, 24, 0.8, 0.9],
-];
-
 export function GoalOrbit({
-  base,
+  start,
+  equity,
   target,
-  current,
-  className = "",
+  odds,
 }: {
-  base: number;
+  start: number;
+  equity: number;
   target: number;
-  /** where the ship sits; equals base before the plan starts */
-  current: number;
-  className?: string;
+  odds: number;
 }) {
-  const raw = target !== base ? (current - base) / (target - base) : 0;
-  const progress = Math.min(1, Math.max(0, raw));
-  // keep the ship visually on the arc even at the extremes
-  const t = Math.min(0.97, Math.max(0.03, progress));
-  const ship = pointAt(t);
-  const pct = Math.round(progress * 100);
+  const progress = clamp((equity - start) / Math.max(target - start, 1), 0, 1);
+  const over = equity > target;
+
+  // Elliptical ring: depart at the left point, arrive over the top at the
+  // right point where the North Star hangs.
+  const G = { w: 800, h: 320, cx: 400, cy: 170, rx: 300, ry: 118 };
+  const pointAt = (t: number) => {
+    const th = Math.PI + clamp(t, 0, 1) * Math.PI; // π (left) → 2π (right), over the top
+    return { x: G.cx + G.rx * Math.cos(th), y: G.cy + G.ry * Math.sin(th) };
+  };
+  const RING_D = `M ${G.cx - G.rx} ${G.cy} A ${G.rx} ${G.ry} 0 0 1 ${G.cx + G.rx} ${G.cy}`;
+  const ship = pointAt(over ? 1 : progress);
+
+  const stars = useMemo(
+    () =>
+      [
+        [40, 40, 0.5, 2.1], [90, 90, 0.7, 3.4], [140, 30, 0.4, 1.8], [200, 110, 0.55, 4.2],
+        [260, 70, 0.35, 2.6], [320, 150, 0.6, 3.1], [380, 40, 0.45, 1.4], [440, 120, 0.7, 2.9],
+        [500, 60, 0.3, 4.6], [560, 170, 0.5, 2.2], [620, 90, 0.65, 3.7], [680, 200, 0.4, 1.6],
+        [720, 130, 0.55, 2.4], [80, 200, 0.35, 3.3], [180, 180, 0.5, 4.8], [300, 220, 0.3, 2.7],
+        [410, 210, 0.45, 1.9], [540, 230, 0.6, 3.5], [650, 250, 0.4, 2.0], [760, 90, 0.7, 4.1],
+        [120, 280, 0.5, 2.9], [700, 280, 0.55, 3.8],
+      ] as Array<[number, number, number, number]>,
+    [],
+  );
+
+  const mesh = [
+    [60, 80, 180, 40], [180, 40, 320, 90], [320, 90, 480, 30],
+    [120, 160, 260, 100], [260, 100, 420, 140], [420, 140, 600, 80],
+    [200, 220, 360, 180], [360, 180, 540, 160], [540, 160, 700, 100],
+  ];
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className={`h-auto w-full ${className}`}
-      role="img"
-      aria-label={`Plan progress: ${pct}% of the way from ${fmtUsd(base)} to ${fmtUsd(target)}`}
-    >
-      <defs>
-        {/* the sailed leg warms from teal (departure) to gold (the star) */}
-        <linearGradient id="voyage-grad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={CHART.teal} />
-          <stop offset="1" stopColor={CHART.star} />
-        </linearGradient>
-      </defs>
-      {STARS.map(([x, y, r, delay], i) => (
-        <circle
-          key={i}
-          cx={x}
-          cy={y}
-          r={r}
-          fill={CHART.ink}
-          opacity={delay === null ? 0.35 : 0.7}
-          className={delay === null ? undefined : "animate-twinkle"}
-          style={delay === null ? undefined : { animationDelay: `${delay}s` }}
-        />
-      ))}
-
-      {/* remaining leg: dashed hairline, drifting toward the star */}
-      <path
-        d={ARC_D}
-        fill="none"
-        stroke={CHART.hairline}
-        strokeWidth={1.5}
-        strokeDasharray="3 5"
-        className="animate-orbit-dash"
-      />
-      {/* sailed leg: soft glow under a teal-to-gold gradient line */}
-      <path
-        d={ARC_D}
-        fill="none"
-        stroke="url(#voyage-grad)"
-        strokeWidth={7}
-        strokeOpacity={0.18}
-        pathLength={100}
-        strokeDasharray={`${t * 100} 100`}
-        strokeLinecap="round"
-      />
-      <path
-        d={ARC_D}
-        fill="none"
-        stroke="url(#voyage-grad)"
-        strokeWidth={2.5}
-        pathLength={100}
-        strokeDasharray={`${t * 100} 100`}
-        strokeLinecap="round"
-      />
-
-      {/* departure */}
-      <circle cx={P0.x} cy={P0.y} r={3.5} fill={CHART.teal} fillOpacity={0.9} />
-      <text x={P0.x - 6} y={P0.y + 20} fill={CHART.ink2} fontSize={11} fontFamily="var(--font-geist-mono)">
-        {fmtUsd(base)}
-      </text>
-
-      {/* the North Star: the target */}
-      <g transform={`translate(${P2.x} ${P2.y})`}>
-        <path d={STAR_D} fill={CHART.star} className="animate-twinkle" />
-        <path d={STAR_D} fill="none" stroke={CHART.star} strokeOpacity={0.35} strokeWidth={4} />
-      </g>
-      <text
-        x={P2.x - 16}
-        y={P2.y - 18}
-        textAnchor="end"
-        fill={CHART.star}
-        fontSize={11}
-        fontWeight={600}
-        fontFamily="var(--font-geist-mono)"
+    <div className="starfield relative h-full min-h-80 overflow-hidden rounded-xl">
+      <svg
+        viewBox={`0 0 ${G.w} ${G.h}`}
+        className="h-auto w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Goal orbit. Equity ${compactMoney(equity)} of ${compactMoney(target)}. Odds ${(odds * 100).toFixed(0)} percent.`}
       >
-        {fmtUsd(target)}
-      </text>
+        <defs>
+          <linearGradient id="orbit-gold" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stopColor="#35D0BA" />
+            <stop offset="55%" stopColor="#F5C542" />
+            <stop offset="100%" stopColor="#F5C542" />
+          </linearGradient>
+          <filter id="orbit-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3.5" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="star-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="2.2" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-      {/* the ship: where the plan currently stands (gold-ringed dot) */}
-      <circle cx={ship.x} cy={ship.y} r={11} fill={CHART.star} opacity={0.16} className="animate-pulse-slow" />
-      <circle cx={ship.x} cy={ship.y} r={4.5} fill={CHART.paper} stroke={CHART.star} strokeWidth={2} />
-      {progress > 0 && (
+        {mesh.map(([x1, y1, x2, y2], i) => (
+          <line
+            key={i}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke="#24334F"
+            strokeWidth="0.6"
+            opacity="0.55"
+          />
+        ))}
+
+        {stars.map(([x, y, r, delay], i) => (
+          <circle
+            key={i}
+            cx={x}
+            cy={y}
+            r={r}
+            fill="#E7EEF9"
+            className="motion-safe:animate-twinkle"
+            style={{ animationDelay: `${delay}s`, animationDuration: `${2.8 + (i % 5) * 0.4}s` }}
+          />
+        ))}
+
+        {/* the ring: track + animated dashed overlay + glowing sailed arc */}
+        <path d={RING_D} fill="none" stroke="#24334F" strokeWidth="2" strokeLinecap="round" />
+        <path
+          d={RING_D}
+          fill="none"
+          stroke="#F5C542"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeDasharray="5 7"
+          opacity="0.7"
+          className="motion-safe:animate-orbit-dash"
+          pathLength={100}
+        />
+        <path
+          d={RING_D}
+          fill="none"
+          stroke="url(#orbit-gold)"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          filter="url(#orbit-glow)"
+          pathLength={100}
+          strokeDasharray={`${progress * 100} 100`}
+        />
+
+        {/* departure */}
+        <circle cx={G.cx - G.rx} cy={G.cy} r="4.5" fill="#A2B3D1" />
         <text
-          x={ship.x}
-          y={ship.y + 24}
+          x={G.cx - G.rx}
+          y={G.cy + 24}
           textAnchor="middle"
-          fill={CHART.star}
-          fontSize={12}
-          fontWeight={600}
-          fontFamily="var(--font-geist-mono)"
+          fill="#A2B3D1"
+          fontSize="11"
+          fontFamily="var(--font-plex-mono), monospace"
         >
-          {fmtUsd(current)}
+          {compactMoney(start)}
         </text>
-      )}
-    </svg>
+
+        {/* the ship: where the plan currently stands */}
+        <g transform={`translate(${ship.x}, ${ship.y})`}>
+          <circle r="10" fill="#F5C542" opacity="0.18" className="motion-safe:animate-breathe" />
+          <circle r="4.2" fill="#F5C542" />
+          <circle r="1.6" fill="#0B1220" />
+        </g>
+        <text
+          x={clamp(ship.x + 12, 60, G.w - 90)}
+          y={clamp(ship.y - 12, 16, G.h - 10)}
+          fill="#F5C542"
+          fontSize="11"
+          fontFamily="var(--font-plex-mono), monospace"
+        >
+          {compactMoney(equity)}
+        </text>
+
+        {/* the North Star: the destination */}
+        <g transform={`translate(${G.cx + G.rx}, ${G.cy})`} filter="url(#star-glow)">
+          <path
+            d="M0 -14 L2.2 -2.4 L14 0 L2.2 2.4 L0 14 L-2.2 2.4 L-14 0 L-2.2 -2.4 Z"
+            fill="#F5C542"
+          />
+          <circle r="2" fill="#0B1220" />
+        </g>
+        <text
+          x={G.cx + G.rx}
+          y={G.cy + 30}
+          textAnchor="middle"
+          fill="#F5C542"
+          fontSize="11"
+          fontFamily="var(--font-plex-mono), monospace"
+        >
+          {compactMoney(target)}
+        </text>
+      </svg>
+    </div>
   );
 }

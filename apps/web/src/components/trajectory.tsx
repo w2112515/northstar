@@ -1,9 +1,9 @@
 "use client";
 
-/** The signature visual: the actual equity curve - the voyage line, gold -
- *  drawn over the plan's Monte Carlo cone (p10-p90 fan, p50 dashed), with
- *  the target as a dashed gold line carrying the star. Plan vs reality on
- *  one axis - the honest answer to "am I on track, and how do I know". */
+/** Plan-vs-reality chart: the actual equity curve (gold) drawn over the
+ *  plan's Monte Carlo cone (p10-p90 signal fan, p50 dashed), with the target
+ *  as a dashed ruled line carrying the small star. The honest answer to
+ *  "am I on track, and how do I know". */
 
 import {
   Area,
@@ -51,7 +51,7 @@ export function TrajectoryHero({
       : null;
 
   // Without a plan start, align the actual curve to its own first point so
-  // the hero still draws instead of silently emptying.
+  // the chart still draws instead of silently emptying.
   const startMs = start
     ? Date.parse(start)
     : equity.length > 0
@@ -92,7 +92,7 @@ export function TrajectoryHero({
 
   return (
     <div className={className} role="img" aria-label={ariaLabel}>
-      <ResponsiveContainer width="100%" height={280}>
+      <ResponsiveContainer width="100%" height={260}>
         <ComposedChart margin={{ top: 10, right: 12, bottom: 0, left: 0 }}>
           <XAxis
             type="number"
@@ -100,7 +100,7 @@ export function TrajectoryHero({
             domain={[0, maxD]}
             tick={AXIS_TICK}
             tickLine={false}
-            axisLine={{ stroke: CHART.hairline }}
+            axisLine={{ stroke: CHART.line }}
             tickFormatter={(d: number) => `+${Math.round(d / DAYS_PER_MONTH)}mo`}
           />
           <YAxis
@@ -130,7 +130,8 @@ export function TrajectoryHero({
               data={coneRows}
               dataKey="band"
               stroke="none"
-              fill={CHART.cone}
+              fill={CHART.signal}
+              fillOpacity={0.14}
               isAnimationActive={false}
             />
           )}
@@ -138,7 +139,7 @@ export function TrajectoryHero({
             <Line
               data={coneRows}
               dataKey="p50"
-              stroke={CHART.median}
+              stroke={CHART.mist}
               strokeDasharray="4 3"
               strokeWidth={1}
               dot={false}
@@ -148,7 +149,7 @@ export function TrajectoryHero({
           <Line
             data={actualRows}
             dataKey="equity"
-            stroke={CHART.star}
+            stroke={CHART.gold}
             strokeWidth={2.25}
             dot={false}
             isAnimationActive={false}
@@ -156,34 +157,34 @@ export function TrajectoryHero({
           {target != null && (
             <ReferenceLine
               y={target}
-              stroke={CHART.star}
+              stroke={CHART.gold}
               strokeDasharray="6 4"
               strokeWidth={1}
               label={{
                 value: `✦ ${fmtUsd(target, 0)}`,
                 position: "insideTopRight",
-                fill: CHART.star,
+                fill: CHART.gold,
                 fontSize: 11,
-                fontFamily: "var(--font-geist-mono)",
+                fontFamily: "var(--font-plex-mono), monospace",
               }}
             />
           )}
           {todayD != null && todayD > 0 && todayD < maxD && (
-            <ReferenceLine x={Math.floor(todayD)} stroke={CHART.hairline} strokeDasharray="2 3" />
+            <ReferenceLine x={Math.floor(todayD)} stroke={CHART.line} strokeDasharray="2 3" />
           )}
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-micro text-ink2">
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-micro text-mist">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-star" /> actual equity
+          <span className="inline-block h-0.5 w-4 bg-gold" /> actual equity
         </span>
         {usableBands && (
           <>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-4 bg-ink/10" /> p10–p90 simulated cone
+              <span className="inline-block h-2 w-4 bg-signal/20" /> p10–p90 simulated cone
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0 w-4 border-t border-dashed border-ink2" /> median path
+              <span className="inline-block h-0 w-4 border-t border-dashed border-mist" /> median path
             </span>
           </>
         )}
@@ -229,47 +230,43 @@ export function ProbStrip({
     { v: p90, label: "lucky", strong: false, below: false },
   ];
 
-  // The strip owns its label room: the ruler sits at 40px with the "above"
-  // row (two micro lines ≈ 31px) inside the top margin and the "below" row
-  // inside the bottom one. Nothing may hang outside the h-24 box - that is
-  // how labels used to collide with whatever the caller rendered above.
   return (
     <div className="pt-1">
-      <div className="relative h-24">
-        <div className="absolute inset-x-0 top-10 h-px bg-hairline" />
+      <div className="relative h-16">
+        <div className="absolute inset-x-0 top-6 h-px bg-line" />
         {ticks.map((t) => (
           <div key={t.label} className="absolute top-0" style={{ left: x(t.v) }}>
             {!t.below && (
-              <div className="absolute left-0 top-0 -translate-x-1/2 text-center">
+              <div className="absolute bottom-5 left-0 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
-                <div className="font-mono text-micro text-ink2">{t.label}</div>
+                <div className="font-mono text-micro text-mist">{t.label}</div>
               </div>
             )}
             <div
-              className={`absolute left-0 top-10 w-px -translate-x-1/2 ${
-                t.strong ? "h-3.5 -translate-y-1 bg-ink" : "h-2.5 bg-ink2/60"
+              className={`absolute left-0 top-6 w-px -translate-x-1/2 ${
+                t.strong ? "h-3.5 -translate-y-1 bg-ink" : "h-2.5 bg-mist/60"
               }`}
             />
             {t.below && (
-              <div className="absolute left-0 top-14 -translate-x-1/2 text-center">
+              <div className="absolute left-0 top-8 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
-                <div className="font-mono text-micro text-ink2">{t.label}</div>
+                <div className="font-mono text-micro text-mist">{t.label}</div>
               </div>
             )}
           </div>
         ))}
         {target != null && (
-          <div className="absolute top-4 -translate-x-1/2" style={{ left: x(target) }}>
-            <div className="text-center font-mono text-micro font-semibold text-star">✦</div>
-            <div className="mx-auto h-3 w-px translate-y-2.5 bg-star" />
+          <div className="absolute top-0 -translate-x-1/2" style={{ left: x(target) }}>
+            <div className="text-center font-mono text-micro font-semibold text-gold">✦</div>
+            <div className="h-3 w-px translate-y-2.5 bg-gold" />
           </div>
         )}
       </div>
-      <p className="mt-1 font-mono text-micro text-ink2">
+      <p className="mt-1 font-mono text-micro text-mist">
         {Math.round(probability * 100)}% of simulated paths reach the target · Monte Carlo on
         historical returns · estimate, not a promise
       </p>

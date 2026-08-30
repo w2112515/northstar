@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Outfit } from "next/font/google";
 import "./globals.css";
-import { Chrome } from "@/components/chrome";
+import { AppShell } from "@/components/shell";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"] });
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
 
 export const metadata: Metadata = {
   title: "NorthStar - goal-first trading copilot",
@@ -17,11 +21,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       translate="no"
-      className={`${geistSans.variable} ${geistMono.variable} notranslate h-full antialiased`}
+      className={`${outfit.variable} ${plexMono.variable} notranslate h-full antialiased`}
     >
-      <body className="starfield flex min-h-screen flex-col">
-        <Chrome>{children}</Chrome>
+      <body className="min-h-screen bg-void text-ink">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
 }
+

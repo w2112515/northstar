@@ -2,8 +2,7 @@
 
 /** Market panel: real daily candles (Alpaca data), our own fills as honest
  *  trade markers, and the TimesFM 5-day quantile band drawn into the future.
- *  Print-financial-chart styling on an inset plate. Read-only - nothing on
- *  this panel can place an order. */
+ *  Grok-prototype visual language; read-only - nothing here places an order. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,7 +15,8 @@ import {
   createSeriesMarkers,
   type Time,
 } from "lightweight-charts";
-import { apiGet, fmtUsd } from "@/lib/api";
+import { Search } from "lucide-react";
+import { apiGet, fmtPct } from "@/lib/api";
 import { CHART } from "@/lib/theme";
 import type { ForecastDoc } from "@/lib/types";
 
@@ -24,11 +24,11 @@ type Bar = { t: string; o: number; h: number; l: number; c: number; v: number };
 type Marker = { date: string; side: string; symbol: string; qty: number; label: string };
 
 // All canvas colors come from lib/theme.ts (the single chart-theme source,
-// mirroring the ledger tokens) - never define hex values locally.
-const UP = CHART.green;
-const DOWN = CHART.red;
-const BAND = CHART.ink2;
-const MUTED = CHART.ink2;
+// mirroring the Night Voyage tokens) - never define hex values locally.
+const UP = CHART.teal;
+const DOWN = CHART.coral;
+const BAND = CHART.mist;
+const MUTED = CHART.mist;
 const GRID = CHART.grid;
 
 /** Next n weekdays after an ISO date (forecast band lives in the future). */
@@ -74,8 +74,8 @@ function Chart({
       rightPriceScale: { borderColor: GRID, scaleMargins: { top: 0.05, bottom: 0.24 } },
       timeScale: { borderColor: GRID, rightOffset: 2 },
       crosshair: {
-        horzLine: { labelBackgroundColor: CHART.hairline },
-        vertLine: { labelBackgroundColor: CHART.hairline },
+        horzLine: { labelBackgroundColor: CHART.line },
+        vertLine: { labelBackgroundColor: CHART.line },
       },
       // the page owns the scroll wheel; drag to pan, pinch to zoom,
       // double-click resets - no more wandering off into empty space
@@ -121,7 +121,7 @@ function Chart({
         bars.map((b) => ({
           time: b.t as Time,
           value: b.v,
-          color: b.c >= b.o ? CHART.greenFill : CHART.redFill,
+          color: b.c >= b.o ? CHART.tealFill : CHART.coralFill,
         })),
       );
     }
@@ -142,9 +142,9 @@ function Chart({
         });
         s.setData([anchor, ...values.map((v, i) => ({ time: days[i] as Time, value: v }))]);
       };
-      mk(forecast.q90, BAND, 1, true);
-      mk(forecast.q50, CHART.median, 1, true);
-      mk(forecast.q10, BAND, 1, true);
+      mk(forecast.q90, CHART.signal, 1, true);
+      mk(forecast.q50, BAND, 1, true);
+      mk(forecast.q10, CHART.signal, 1, true);
     }
 
     if (markers.length) {
@@ -170,7 +170,7 @@ function Chart({
     };
   }, [bars, markers, forecast]);
 
-  return <div ref={holder} className="h-72 w-full sm:h-80 xl:h-[380px]" />;
+  return <div ref={holder} className="h-full w-full" />;
 }
 
 export type WatchGroup = { label: string; symbols: string[] };
@@ -181,7 +181,7 @@ export function MarketPanel({
   forecastDoc,
 }: {
   symbols: string[];
-  /** Optional rail grouping (e.g. Holdings / Scout / Core). Must cover `symbols`. */
+  /** Rail grouping (Holdings / Scout / Core). Must cover `symbols`. */
   groups?: WatchGroup[];
   forecastDoc: ForecastDoc | null;
 }) {
@@ -194,6 +194,8 @@ export function MarketPanel({
   // never another symbol's candles under the new symbol's name.
   const [shownSymbol, setShownSymbol] = useState("");
   const [err, setErr] = useState("");
+  const [q, setQ] = useState("");
+  const [custom, setCustom] = useState<string[]>([]);
   const seqRef = useRef(0);
 
   const load = useCallback(async (symbol: string) => {
@@ -220,16 +222,14 @@ export function MarketPanel({
 
   useEffect(() => {
     // Bars are keyed by a request token (seqRef) so stale responses can never
-    // paint under the wrong symbol; SWR would refetch the same data on every
-    // symbol hop without that guarantee, so this stays hand-rolled.
+    // paint under the wrong symbol.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load(active);
   }, [active, load]);
 
   // The parent refetches the forecast doc on a poll, producing a new object
   // with identical content. Key the chart's forecast input by *content* so the
-  // chart is not destroyed and rebuilt (and the user's pan/zoom reset) on
-  // every poll tick.
+  // chart is not destroyed and rebuilt on every poll tick.
   const fcRaw = forecastDoc?.symbols?.[active] ?? null;
   const fcKey = fcRaw ? JSON.stringify(fcRaw) : "";
   const fc = useMemo<ForecastDoc["symbols"][string] | null>(
@@ -237,84 +237,99 @@ export function MarketPanel({
     [fcKey],
   );
 
-  if (symbols.length === 0) return null;
-  const inSync = shownSymbol === active;
-  const lastBar = inSync ? bars[bars.length - 1] : undefined;
-  // Lots of symbols read better as a watchlist rail than a wall of chips.
-  const useRail = symbols.length > 6;
-  const railGroups: WatchGroup[] =
+  const railGroups: WatchGroup[] = (
     groups && groups.some((g) => g.symbols.length > 0)
       ? groups.filter((g) => g.symbols.length > 0)
-      : [{ label: "", symbols }];
+      : [{ label: "", symbols }]
+  )
+    .concat(custom.length ? [{ label: "Typed", symbols: custom }] : [])
+    .map((g) => ({ ...g, symbols: g.symbols.slice(0, 12) }));
 
-  const symbolButton = (s: string, rail: boolean) => (
-    <button
-      key={s}
-      onClick={() => setSel(s)}
-      aria-pressed={s === active}
-      className={
-        rail
-          ? `rounded-sm px-2 py-1 text-left font-mono text-body transition-colors ${
-              s === active
-                ? "bg-inset font-semibold text-ink"
-                : "text-ink2 hover:bg-inset/60 hover:text-ink"
-            }`
-          : `-mb-px border-b-2 px-1.5 py-0.5 font-mono text-micro transition-colors ${
-              s === active
-                ? "border-indigo font-semibold text-ink"
-                : "border-transparent text-ink2 hover:text-ink"
-            }`
-      }
-    >
-      {s}
-    </button>
-  );
+  const inSync = shownSymbol === active;
+  const lastBar = inSync ? bars[bars.length - 1] : undefined;
+  const prevBar = inSync && bars.length > 1 ? bars[bars.length - 2] : undefined;
+  const change = lastBar && prevBar ? lastBar.c / prevBar.c - 1 : null;
+
+  const pickTyped = () => {
+    const typed = q.trim().toUpperCase();
+    if (!/^[A-Z][A-Z.\-]{0,7}$/.test(typed)) return;
+    if (!symbols.includes(typed) && !custom.includes(typed)) setCustom((c) => [...c, typed]);
+    setSel(typed);
+    setQ("");
+  };
+
+  if (symbols.length === 0) return null;
 
   return (
-    <div>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-body font-semibold">{active}</span>
-          {lastBar && (
-            <span className="font-mono text-body tabular-nums text-ink">
-              {fmtUsd(lastBar.c, 2)}
-            </span>
-          )}
-        </div>
-        <div className={`flex flex-wrap gap-1.5 ${useRail ? "xl:hidden" : ""}`}>
-          {symbols.map((s) => symbolButton(s, false))}
-        </div>
-      </div>
-      <div className={useRail ? "xl:flex xl:items-stretch xl:gap-3" : ""}>
-        {useRail && (
-          <div className="hidden xl:block xl:w-[112px] xl:shrink-0">
-            <div className="flex max-h-[380px] flex-col gap-0.5 overflow-y-auto border-r border-hairline pr-2">
-              {railGroups.map((g, gi) => (
-                <div key={g.label || gi} className="flex flex-col gap-0.5">
-                  {g.label && (
-                    <div className={`px-2 font-mono text-micro uppercase tracking-[0.12em] text-ink2 ${gi > 0 ? "mt-2.5" : ""}`}>
-                      {g.label}
-                    </div>
-                  )}
-                  {g.symbols.map((s) => symbolButton(s, true))}
-                </div>
-              ))}
-            </div>
-          </div>
+    <div className="flex h-full min-h-72 flex-col">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="kicker">Market</span>
+        <span className="text-sm text-ink">{active}</span>
+        {lastBar && (
+          <span className={`num text-xs ${change != null && change < 0 ? "text-coral" : "text-teal"}`}>
+            {lastBar.c.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+            {change != null ? fmtPct(change, 1) : ""}
+          </span>
         )}
-        <div className="panel-inset min-w-0 flex-1 px-2 py-2">
-          {inSync && err ? (
-            <p className="py-10 text-center text-body text-ink2">{err}</p>
-          ) : !inSync || bars.length === 0 ? (
-            <p className="py-10 text-center font-mono text-micro text-ink2">
-              Loading {active} candles…
-            </p>
-          ) : (
-            <Chart bars={bars} markers={markers} forecast={fc} />
-          )}
+        <div className="relative ml-auto w-40">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-mist" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                pickTyped();
+              }
+              if (e.key === "Escape") setQ("");
+            }}
+            placeholder="Any ticker"
+            aria-label="Load any ticker"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-8 w-full rounded-md bg-void pl-8 pr-2 text-xs text-ink shadow-border placeholder:text-mist/60"
+          />
         </div>
       </div>
-      <p className="mt-1.5 font-mono text-micro text-ink2">
+
+      <div className={`mt-2 min-h-0 flex-1 ${!inSync ? "opacity-60" : ""} h-44`}>
+        {inSync && err ? (
+          <p className="py-10 text-center text-sm text-mist">{err}</p>
+        ) : !inSync || bars.length === 0 ? (
+          <p className="py-10 text-center font-mono text-micro text-mist">Loading {active} candles…</p>
+        ) : (
+          <Chart bars={bars} markers={markers} forecast={fc} />
+        )}
+      </div>
+
+      <div className="mt-3 max-h-36 space-y-0.5 overflow-y-auto">
+        {railGroups.map((g) => (
+          <div key={g.label || "all"}>
+            {g.label && (
+              <div className="px-2 pt-1.5 font-mono text-micro uppercase tracking-[0.12em] text-mist">
+                {g.label}
+              </div>
+            )}
+            <ul className="grid grid-cols-2 gap-0.5">
+              {g.symbols.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => setSel(s)}
+                    aria-pressed={s === active}
+                    className={`flex h-9 w-full items-center justify-between rounded-sm px-2 text-left text-xs transition-[background-color,color] duration-150 ${
+                      s === active ? "bg-panel text-ink" : "text-mist hover:bg-panel/60 hover:text-ink"
+                    }`}
+                  >
+                    <span className="num">{s}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1.5 font-mono text-micro text-mist">
         real candles · arrows are our own fills · dashed lines are the TimesFM band (model
         estimates, not promises) · read-only
       </p>

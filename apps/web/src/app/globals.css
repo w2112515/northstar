@@ -1,143 +1,174 @@
 @import "tailwindcss";
 
-/* NIGHT LEDGER v4.1 - docs/DESIGN.md. The night ledger with the prototype's
-   texture harvested onto it: void/night layering, rounded glowing panels,
-   a nebula starfield. One interactive accent (indigo/signal: links, focus,
-   active states); teal marks deterministic code; gold is reserved for star
-   moments only (primary CTA, AI narration, the target and the voyage line).
-   Chart/canvas colors must come from lib/theme.ts, which mirrors these. */
-:root {
-  --paper: #0b1220;
-  --raised: #121c30;
-  --inset: #1a2740;
-  --ink: #e7eef9;
-  --ink-2: #a2b3d1;
-  --hairline: #24334f;
-  --indigo: #5b8def;
-  --teal: #35d0ba;
-  --red: #ff6b6b;
-  --green: #4caf8e;
-  --amber: #f0a860;
-  --star: #f5c542;
-}
+/* Night Voyage, Grok-prototype edition - the approved visual authority.
+   Token system, component classes and motion ported from the reference
+   prototype; charts take colors from lib/theme.ts which mirrors these.
+   Copy blacklist (captain/voyage/fleet/helm/sail/dock) still applies to UI
+   strings - see docs/DESIGN.md. */
 
-@theme inline {
-  --color-paper: var(--paper);
-  --color-raised: var(--raised);
-  --color-inset: var(--inset);
-  --color-ink: var(--ink);
-  --color-ink2: var(--ink-2);
-  --color-hairline: var(--hairline);
-  --color-indigo: var(--indigo);
-  --color-teal: var(--teal);
-  --color-red: var(--red);
-  --color-green: var(--green);
-  --color-amber: var(--amber);
-  --color-star: var(--star);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-serif: Georgia, "Times New Roman", serif;
+@theme {
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* panel depth language (harvested from the prototype spec) */
+  --color-void: #0b1220;
+  --color-night: #121c30;
+  --color-panel: #1a2740;
+  --color-line: #24334f;
+  --color-ink: #e7eef9;
+  --color-mist: #a2b3d1;
+  --color-gold: #f5c542;
+  --color-teal: #35d0ba;
+  --color-coral: #ff6b6b;
+  --color-amber: #f0a860;
+  --color-signal: #5b8def;
+  --color-void-deep: #070b14;
+  --color-gold-dim: #3a3118;
+  --color-teal-dim: #12352f;
+  --color-coral-dim: #3a1c22;
+  --color-amber-dim: #3a2c18;
+  --color-signal-dim: #1a2748;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+
   --shadow-border: 0 0 0 1px rgb(255 255 255 / 0.07);
   --shadow-border-hover: 0 0 0 1px rgb(255 255 255 / 0.13);
+  --shadow-gold: 0 0 24px rgb(245 197 66 / 0.22);
   --shadow-panel: 0 12px 40px rgb(0 0 0 / 0.28);
-  --shadow-tone-gold: 0 0 0 1px color-mix(in oklab, var(--star) 45%, transparent);
-  --shadow-tone-teal: 0 0 0 1px color-mix(in oklab, var(--teal) 40%, transparent);
-  --shadow-tone-coral: 0 0 0 1px color-mix(in oklab, var(--red) 40%, transparent);
-  --shadow-tone-amber: 0 0 0 1px color-mix(in oklab, var(--amber) 42%, transparent);
-  --shadow-tone-signal: 0 0 0 1px color-mix(in oklab, var(--indigo) 45%, transparent);
+  --shadow-tone-gold: 0 0 0 1px color-mix(in oklab, var(--color-gold) 45%, transparent);
+  --shadow-tone-teal: 0 0 0 1px color-mix(in oklab, var(--color-teal) 40%, transparent);
+  --shadow-tone-coral: 0 0 0 1px color-mix(in oklab, var(--color-coral) 40%, transparent);
+  --shadow-tone-amber: 0 0 0 1px color-mix(in oklab, var(--color-amber) 42%, transparent);
+  --shadow-tone-signal: 0 0 0 1px color-mix(in oklab, var(--color-signal) 45%, transparent);
 
-  /* The six sizes this ledger speaks - docs/DESIGN.md type scale (v3,
-     kept verbatim by v4).
-     micro:   monospaced uppercase labels, stamps, timestamps
-     body:    default copy and table cells
-     section: section headings
-     page:    page-level h1 (one per page)
-     display: section-level key numbers
-     hero:    the one number a camera must be able to read */
-  --text-micro: 11px;
-  --text-micro--line-height: 1.4;
-  --text-body: 13px;
-  --text-body--line-height: 1.55;
-  --text-section: 15px;
-  --text-section--line-height: 1.4;
-  --text-page: 20px;
-  --text-page--line-height: 1.25;
-  --text-display: 32px;
-  --text-display--line-height: 1.1;
-  --text-hero: clamp(44px, 9vw, 72px);
-  --text-hero--line-height: 1;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 0.875rem;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    background: var(--color-void);
+    color: var(--color-ink);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    letter-spacing: -0.011em;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal) 40%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* one designed focus ring for the whole app */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-void), 0 0 0 4px var(--color-signal);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
 }
 
-/* one designed focus ring for the whole app */
-:focus-visible {
-  outline: 2px solid var(--indigo);
-  outline-offset: 2px;
+@layer components {
+  .kicker {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-mist);
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .hero-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: clamp(2.25rem, 1.4rem + 3vw, 3.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    font-weight: 500;
+  }
+
+  .panel {
+    background: var(--color-night);
+    box-shadow: var(--shadow-border);
+    border-radius: var(--radius-xl);
+  }
+
+  .panel-inset {
+    background: var(--color-panel);
+    box-shadow: var(--shadow-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .hairline {
+    box-shadow: var(--shadow-border);
+  }
+
+  .starfield {
+    background-color: var(--color-void);
+    background-image:
+      radial-gradient(ellipse 80% 60% at 80% 10%, rgb(245 197 66 / 0.08), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 10% 90%, rgb(91 141 239 / 0.08), transparent 50%),
+      radial-gradient(1.2px 1.2px at 12% 22%, rgb(231 238 249 / 0.55), transparent),
+      radial-gradient(1px 1px at 28% 64%, rgb(231 238 249 / 0.35), transparent),
+      radial-gradient(1.4px 1.4px at 48% 18%, rgb(231 238 249 / 0.5), transparent),
+      radial-gradient(1px 1px at 66% 72%, rgb(231 238 249 / 0.28), transparent),
+      radial-gradient(1.2px 1.2px at 82% 36%, rgb(231 238 249 / 0.45), transparent),
+      radial-gradient(1px 1px at 91% 78%, rgb(231 238 249 / 0.3), transparent),
+      radial-gradient(1.5px 1.5px at 8% 82%, rgb(245 197 66 / 0.35), transparent),
+      radial-gradient(1px 1px at 74% 12%, rgb(53 208 186 / 0.35), transparent);
+  }
 }
 
-::selection {
-  background: color-mix(in srgb, var(--indigo) 16%, transparent);
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.95; }
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline) transparent;
-}
-
-/* Starfield: the whole app sails at night. Two faint nebulae (gold upper
-   right, signal lower left) under fixed star points - no hydration drift.
-   Colors reference the tokens via color-mix so the sync obligation in
-   lib/theme.ts has no silent opt-outs. */
-.starfield {
-  background-color: var(--paper);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 80% 10%, color-mix(in srgb, var(--star) 12%, transparent), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 10% 90%, color-mix(in srgb, var(--indigo) 13%, transparent), transparent 55%),
-    radial-gradient(1.2px 1.2px at 12% 22%, color-mix(in srgb, var(--ink) 55%, transparent), transparent),
-    radial-gradient(1px 1px at 28% 64%, color-mix(in srgb, var(--ink) 35%, transparent), transparent),
-    radial-gradient(1.4px 1.4px at 48% 18%, color-mix(in srgb, var(--ink) 50%, transparent), transparent),
-    radial-gradient(1px 1px at 66% 72%, color-mix(in srgb, var(--ink) 28%, transparent), transparent),
-    radial-gradient(1.2px 1.2px at 82% 36%, color-mix(in srgb, var(--ink) 45%, transparent), transparent),
-    radial-gradient(1px 1px at 91% 78%, color-mix(in srgb, var(--ink) 30%, transparent), transparent),
-    radial-gradient(1.5px 1.5px at 8% 82%, color-mix(in srgb, var(--star) 35%, transparent), transparent),
-    radial-gradient(1px 1px at 74% 12%, color-mix(in srgb, var(--teal) 35%, transparent), transparent),
-    radial-gradient(1px 1px at 40% 44%, color-mix(in srgb, var(--ink) 22%, transparent), transparent),
-    radial-gradient(1px 1px at 55% 88%, color-mix(in srgb, var(--ink) 20%, transparent), transparent);
-}
-
-/* Panel language: content sits in rounded, hairline-ringed plates lifted
-   off the void, not on ruled paper. The ring is a shadow, not a border,
-   so it never shifts layout. */
-.panel {
-  background: var(--raised);
-  box-shadow: var(--shadow-border), var(--shadow-panel);
-  border-radius: 16px;
-}
-
-.panel-inset {
-  background: var(--inset);
-  box-shadow: var(--shadow-border);
-  border-radius: 12px;
-}
-
-/* ---------------------------------------------------------- motion
-   A ledger barely moves. State-driven only, all off under
-   prefers-reduced-motion. */
-@keyframes stamp-in {
-  from { opacity: 0; transform: scale(1.08); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes flash {
-  from { background-color: color-mix(in srgb, var(--indigo) 9%, transparent); }
-  to { background-color: transparent; }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.28); opacity: 0.72; }
 }
 
 @keyframes feed-in {
@@ -145,71 +176,60 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pulse-node {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
-/* dash cycle below is 8 units (3 on, 5 off); -16 = two clean cycles */
 @keyframes orbit-dash {
-  to { stroke-dashoffset: -16; }
-}
-
-.animate-stamp-in {
-  animation: stamp-in 0.18s ease-out both;
-}
-
-.animate-flash {
-  animation: flash 0.6s ease-out both;
-}
-
-.animate-feed-in {
-  animation: feed-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.animate-orbit-dash {
-  animation: orbit-dash 8s linear infinite;
-}
-
-/* Loading placeholder: a slow shimmer across an inset bar. */
-.skel {
-  background: linear-gradient(
-    90deg,
-    var(--inset) 0%,
-    color-mix(in srgb, var(--ink-2) 18%, var(--inset)) 50%,
-    var(--inset) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
-  border-radius: 6px;
-}
-
-/* Stars may breathe: the ship beacon and the target star only. */
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes twinkle {
-  0%, 100% { opacity: 0.95; }
-  50% { opacity: 0.3; }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
+  to { stroke-dashoffset: -18; }
 }
 
 .animate-twinkle {
   animation: twinkle 3.6s ease-in-out infinite;
 }
 
+.animate-breathe {
+  animation: breathe 2.8s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.animate-feed-in {
+  animation: feed-in 280ms var(--ease-smooth) both;
+}
+
+.animate-pulse-node {
+  animation: pulse-node 1.4s ease-in-out infinite;
+}
+
+.animate-orbit-dash {
+  animation: orbit-dash 8s linear infinite;
+}
+
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--color-panel) 0%,
+    color-mix(in oklab, var(--color-mist) 18%, var(--color-panel)) 50%,
+    var(--color-panel) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-stamp-in,
-  .animate-flash,
-  .animate-feed-in,
-  .animate-orbit-dash,
-  .animate-pulse-slow,
   .animate-twinkle,
+  .animate-breathe,
+  .animate-feed-in,
+  .animate-pulse-node,
+  .animate-orbit-dash,
   .skel {
     animation: none !important;
   }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Reorganized: the evolution lab lives on System.
+// Reorganized: the evolution lab lives on Research.
 export default function Page() {
-  redirect("/system");
+  redirect("/research");
 }

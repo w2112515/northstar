@@ -3,7 +3,13 @@
 
 export type EngineState = {
   clock: { is_open: boolean; next_open?: string };
-  account: { equity: number; last_equity: number; cash: number; options_level: number };
+  account: {
+    equity: number;
+    last_equity: number;
+    cash: number;
+    buying_power?: number;
+    options_level: number;
+  };
   peak_equity: number;
   drawdown_from_peak: number;
   day_pnl_pct: number;
