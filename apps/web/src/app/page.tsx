@@ -235,7 +235,7 @@ export default function Track() {
         >
           <div className="grid gap-3 md:grid-cols-2">
             {approvals.map((a) => (
-              <div key={a.id} className="panel-inset animate-feed-in p-4">
+              <div key={a.id} className="panel-inset animate-feed-in p-4 shadow-tone-amber">
                 <div className="flex items-center justify-between gap-2">
                   <Stamp tone="amber">needs you</Stamp>
                   <span className="font-mono text-micro text-ink2">{fmtTs(a.created_at)}</span>
@@ -267,7 +267,7 @@ export default function Track() {
               </div>
             ))}
             {advice && (
-              <div className="panel-inset animate-feed-in p-4">
+              <div className="panel-inset animate-feed-in p-4 shadow-tone-amber">
                 <div className="flex items-center justify-between gap-2">
                   <Stamp tone="amber">needs you</Stamp>
                   <span className="font-mono text-micro text-ink2">{fmtTs(advice.ts)}</span>

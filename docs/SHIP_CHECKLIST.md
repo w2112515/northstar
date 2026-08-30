@@ -201,6 +201,20 @@ System 进化晋级 + Track 审批 → Proof 账本血缘 → Cloud Run URL + lo
      压住调用方内容）。
   5. **文档同步**：DESIGN.md v4（夜色色板表+金色三律）、DEMO_SCRIPT.md 页面全量重映射、
      README/TECH/本清单操作项改新页面名。
+- ~~原型收割 v4.1：夜航皮肤移植（8/31 凌晨）~~ 已完成（4 commits，逐 Phase 检查点）：
+  1. **决策**：用户提供的 Grok 原型（`THhdE8o3NRn9RAPU-grok-workspace/`，已 .gitignore）
+     否决整体替换（假数据/TanStack 异框架/旧 IA/平台包袱，距截止 ~30h），采纳为视觉规格。
+  2. **Token 收割**（globals.css + theme.ts 成对）：void `#0B1220` / night `#121C30` /
+     panel `#1A2740`（inset 语义翻转为"亮内面板"）/ mist / signal `#5B8DEF` / coral `#FF6B6B` /
+     amber `#F0A860` + 新增 teal `#35D0BA`（CODE 语义）；星云星空（金右上/靛左下椭圆 + 金青星点）；
+     `.panel`/`.panel-inset` 组件类 + shadow-border/panel/tone-* 辉光；shimmer/feed-in/orbit-dash 动效。
+  3. **组件面**：Section→圆角面板、内卡/图表底/JSON pre→panel-inset、Skeleton→shimmer、
+     Stamp 圆角+tone 洗底、PAPER 金环药丸、顶栏夜色条+✦词标+EQUITY kicker+竖线激活态、
+     schematic CODE 签转 teal、GoalOrbit 虚线流动、审批卡 amber 辉光环+feed-in、页面节奏 space-y-4。
+  4. **文案收割（有界）**：审批卡"为什么暂停(琥珀)/最坏情况(红 mono)"双行、Close/kill/autopilot
+     后果提示句、"queue until the open"句式；航海隐喻词表维持禁用（原型的 docked/sailed/fleet 不收）。
+  5. **验证**：lint 绿、生产 build 绿（13 路由）、11 路由 SSR 200、真实 19 端点契约 200、
+     编译 CSS 含 .panel/.skel/orbit-dash/新色值；DESIGN.md 升 v4.1（规格来源声明）。
 - 剩余可选：AI Analyst MCP 工具链（`AI_ANALYST_MCP=true` 路径）、trade_updates websocket 替代轮询、
   Alpaca 周加菜：指数期权气象对冲（XSP 现金交割 put spread，用上 7/23 新功能）。
 

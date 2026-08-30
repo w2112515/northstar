@@ -1,14 +1,14 @@
 # NorthStar — 前端设计与视觉概念
 
-> 状态：v4，2026-08-31（**Night Ledger：夜色回归**。保留 v3/EVIDENCE 的全部结构纪律——四页 IA、Section 格线语法、Stamp 印章、FieldNote、六档字阶；作废的只是浅色纸面皮肤。v2 Night Voyage 的夜色身份与金色星时刻回归，全站一套夜色板，`.start-dark` 暗房机制退役）。
+> 状态：v4.1，2026-08-31（**Night Ledger + 原型质感收割**。在 v4 夜色回归之上，把 Grok App Builder 原型（`THhdE8o3NRn9RAPU-grok-workspace/`，仅作规格参照、不进构建）的视觉体系移植进来：void/night/panel 三层夜色、星云星空、圆角辉光面板、shimmer 骨架、teal 代码语义。结构纪律（四页 IA、kicker 节标、Stamp、FieldNote、六档字阶）不变；框架/数据层/IA 不变）。
 > 本文件是交互结构与视觉方向的唯一 owner。审计见 `docs/FRONTEND_AUDIT.md`。
 > 平台决定：**Web 桌面优先**，1280px 主设计，平板/手机降级可用不精修。界面语言：**英文**，术语 tooltip 内置人话解释。
 
 ## 0. 设计主张
 
-**界面回答一个问题："你能不能到达，凭什么？"** 每个数字可溯源、每个决策有裁决、每个预测被打分。视觉语言 = **夜航账本（Night Ledger）**：深夜蓝纸面、亮墨、格线、盖章，淡星空铺底；产品叙事（把钱送往北极星的夜航）与证据纪律（实验记录簿）同屏成立。
+**界面回答一个问题："你能不能到达，凭什么？"** 每个数字可溯源、每个决策有裁决、每个预测被打分。视觉语言 = **夜航账本（Night Ledger）**：void 夜空上的圆角夜面板、亮墨、印章、kicker 节标，星云星空铺底；产品叙事（把钱送往北极星的夜航）与证据纪律（实验记录簿）同屏成立。
 
-**叙事弧不再靠换房间表达**：全站同一片夜空，`/start` 向导以轨道弧（GoalOrbit）做仪式感开场，主应用用格线账本做证据。产品名的视觉回声 = 金色四角星（目标线端点、ProbStrip 目标刻度、顶栏进度尺填充）。
+**叙事弧不再靠换房间表达**：全站同一片夜空，`/start` 向导以轨道弧（GoalOrbit）做仪式感开场，主应用用面板账本做证据。产品名的视觉回声 = 金色四角星（顶栏 ✦ 词标、目标线端点、ProbStrip 目标刻度、顶栏进度尺填充）。
 
 ## 1. 信息架构（按用户的问题组织）
 
@@ -30,16 +30,17 @@
 
 | token | 值 | 唯一语义 |
 |---|---|---|
-| `paper` | `#0D1420` | 页面底（夜空） |
-| `raised` | `#131C2E` | 唯一允许的面板（待审批、浮层、tooltip） |
-| `inset` | `#0A101B` | 图表底板、代码块、输入框 |
-| `ink` / `ink-2` | `#E8EDF6` / `#9AA7C0` | 主文字 / 次要文字 |
-| `hairline` | `#26334C` | 格线——唯一分层手段 |
-| `indigo` | `#8AA2FF` | **交互强调**：链接、focus ring、导航/tab 激活态、running、champion 印章 |
-| `star` | `#F5C542` | **星时刻，仅三处**（金色三律，见下） |
-| `red` | `#E0655F` | 拒绝/亏损/危险——印章形态 |
+| `paper` | `#0B1220` | 页面底（void 夜空，星云铺底） |
+| `raised` | `#121C30` | 面板本体（`.panel`：Section、顶栏、hero） |
+| `inset` | `#1A2740` | 面板内的抬升面（`.panel-inset`：图表底板、内卡、输入框、激活 tab）——注意 v4.1 起 inset **亮于** raised，层级 = void < night < panel |
+| `ink` / `ink-2` | `#E7EEF9` / `#A2B3D1` | 主文字 / 次要文字（原型 ink/mist） |
+| `hairline` | `#24334F` | 格线与描边 |
+| `indigo` | `#5B8DEF` | **交互强调**（原型 signal）：链接、focus ring、导航/tab 激活态、running、champion 印章 |
+| `teal` | `#35D0BA` | **确定性代码**：schematic 的 CODE 签、确定性节点 |
+| `star` | `#F5C542` | **星时刻，仅三处**（金色三律，见下）+ 顶栏 ✦ 词标与 PAPER 药丸 |
+| `red` | `#FF6B6B` | 拒绝/亏损/危险（原型 coral）——印章形态 |
 | `green` | `#4CAF8E` | 成交/盈利/验证通过 |
-| `amber` | `#D9A23B` | 等待人类（审批、待决、PAPER 标记) |
+| `amber` | `#F0A860` | 等待人类（审批、待决）——暂停卡配 `shadow-tone-amber` 辉光环 |
 
 **金色三律**（star 只出现在这三处，其余一律 review 打回）：
 
@@ -55,28 +56,28 @@ hover/焦点/激活态永远归 indigo，不得用金表达交互状态；锥形
 
 Geist Sans（UI）+ Geist Mono（全部数字/标签/印章，tabular-nums）+ 系统衬线（Georgia italic，仅 FieldNote 与 schematic 的 `Ai` 签）。六档 token，禁用任意值：`micro 11` / `body 13` / `section 15` / `page 20` / `display 32` / `hero clamp(44px, 9vw, 72px)`。
 
-### 布局语法
+### 布局语法（v4.1：格线纸面 → 圆角面板）
 
-- 页面 = 纸面上的横格线分区（`Section`：hairline 顶线 + micro mono 大写节标 + 内容直接坐在纸上）。只有真正独立的内容（待审批）才配 `raised` 白面板。
+- 页面 = void 上的圆角面板栈（`Section` = `.panel`：night 底 + 16px 圆角 + 1px 白 7% 辉光环（shadow 实现，永不挤动布局）+ kicker 节标）。面板内的独立内容（待审批卡、内嵌图表、JSON pre）用 `.panel-inset`（panel 色 + 12px 圆角）。页面节奏 `space-y-4`。
 - 账本行签名版式：`[Stamp 96px | 内容 1fr | 时间戳 mono 右对齐]`，展开见原始 JSON。
-- 顶栏单行：wordmark · 4 项导航 · 净值+今日Δ · ProgressRuler 细进度尺 · 琥珀 "N need you" · kill 印章 · NY 时钟 · PAPER 标记。sticky。
-- 容器 `max-w-6xl`。
+- 顶栏单行：✦ 金星词标 · 4 项导航（激活态 = inset 底 + indigo 竖线信号）· EQUITY kicker + 净值+今日Δ · ProgressRuler 细进度尺 · 琥珀 "N need you" · kill 印章 · NY 时钟 · 金环 PAPER 药丸。sticky，night 底 85% + blur。
+- 容器 `max-w-6xl`。圆角字典：面板 16 / 内面板 12 / 按钮 8 / 印章 5。
 
 ### 签名元素
 
 1. **TrajectoryHero**：真实净值曲线（**金航迹线**）叠蒙特卡洛锥（p10–p90 墨色扇 + p50 虚线），金色目标虚线直尺 + 端点 ✦。计划 vs 现实同屏。
-2. **Stamp**：描边大写 mono 印章——`REJECTED` 红 / `FILLED` 绿 / `NEEDS YOU` 琥珀 / `PROMOTED`/`CHAMPION` 靛。`eventStamp()` 把 journal 事件映射成印章。
+2. **Stamp**：描边大写 mono 印章（5px 圆角 + 10% tone 洗底）——`REJECTED` 红 / `FILLED` 绿 / `NEEDS YOU` 琥珀 / `PROMOTED`/`CHAMPION` 靛。`eventStamp()` 把 journal 事件映射成印章。
 3. **ProbStrip**：终端分位横条（rough/median/lucky 三刻度 + 金色目标星标 + "estimate, not a promise" 脚注）。标签余量自包含在 h-24 容器内，不得溢出压调用方内容。
 4. **FieldNote**：AI 归因块（见上）。
 5. **ProgressRuler**：顶栏细进度尺，金色填充。
 
 ### 动效
 
-近乎零。仅：新账条 `flash` 600ms 高亮、印章 `stamp-in` 180ms、schematic 节点 150ms 切换。星空为静态定位星点（无 hydration 漂移）；`twinkle` 与 `pulse-slow` 仅限星时刻元素（目标 ✦、/start 船标）。全部 `prefers-reduced-motion` 关闭。
+克制但有质地（v4.1 收割原型四式）：新账条 `flash` 600ms / `feed-in` 280ms 入场、印章 `stamp-in` 180ms、schematic 节点 150ms 切换、骨架 `shimmer`（`.skel`，替代静态灰条）、/start 轨道弧余程 `orbit-dash` 虚线流动。星空为静态定位星点 + 两片星云椭圆（金右上、靛左下，无 hydration 漂移）；`twinkle` 与 `pulse-slow` 仅限星时刻元素（目标 ✦、/start 船标）。全部 `prefers-reduced-motion` 关闭。
 
 ### 可访问性
 
-夜底亮墨对比充裕（ink/paper ≈ 15:1，ink-2/paper ≈ 7:1，star/paper ≈ 10:1，金底夜字 CTA ≈ 10:1，全部过 AA）；focus = 全局 2px indigo ring；印章是文字不是颜色；涨跌带 +/− 符号；`<html translate="no">` 防自动翻译。
+夜底亮墨对比充裕（ink/paper ≈ 16:1，ink-2/paper ≈ 8:1，star/paper ≈ 10:1，teal/paper ≈ 9:1，red/paper ≈ 6:1，金底夜字 CTA ≈ 10:1，全部过 AA；indigo #5B8DEF ≈ 4.9:1，只用于大字/加粗/非文本 UI 信号，不用于小号正文）；focus = 全局 2px indigo ring；印章是文字不是颜色；涨跌带 +/− 符号；`<html translate="no">` 防自动翻译。
 
 ## 3. 文案原则
 
@@ -92,9 +93,12 @@ Geist Sans（UI）+ Geist Mono（全部数字/标签/印章，tabular-nums）+ �
 - 图表主题单一来源：`lib/theme.ts`（单一夜色 `CHART` + `RECHARTS_TOOLTIP` + `AXIS_TICK`），与 globals.css `:root` 同步义务成对修改；图表层禁止就地定义色值。
 - 领域类型单一来源：`lib/types.ts`。
 - 数据层：`lib/data.ts`（SWR 单飞轮询 + northstar:refresh 桥）。
-- 星空：`.starfield` 挂在 `<body>`（layout.tsx），星点用 color-mix 引 token，换色板自动跟随。
+- 星空：`.starfield` 挂在 `<body>`（layout.tsx），星云椭圆与星点用 color-mix 引 token，换色板自动跟随。
+- 面板与辉光：`.panel` / `.panel-inset` 组件类 + `@theme` 的 `--shadow-border` / `--shadow-panel` / `--shadow-tone-*`（五色 tone 环备齐，Tailwind 只 emit 被使用的——当前在用 `shadow-tone-amber` 暂停卡；新增使用处即自动出码）。
 - 验收：1280/768 两宽五页截图；needs-you / kill-ON / 红路径 / 空账 四态留证；lint + build 绿；旧路由 redirect 生效。
 
 ## 5. 参考来源说明（诚实声明）
 
-Mobbin MCP 需付费方案，两轮均未能取得截图参照。方向判断参照已核验的产品模式与类目惯例，只借鉴模式不复制表面：Linear（克制与一个强调色）、Vercel（工程美学）、FT/WSJ 印刷图表（金融图表传统）、Bloomberg（密度即信任）、Stripe（金融严肃感+编辑级打磨）、实验记录簿/示波器（印章与 schematic 语法）。两张 AI 生成方向稿（深色星图 vs 浅色账本）由用户生图产出；v3 曾选浅色账本，v4 经用户对照实机截图后裁定：**结构取账本，身份取夜航**——即本版 Night Ledger。
+Mobbin MCP 需付费方案，两轮均未能取得截图参照。方向判断参照已核验的产品模式与类目惯例，只借鉴模式不复制表面：Linear（克制与一个强调色）、Vercel（工程美学）、FT/WSJ 印刷图表（金融图表传统）、Bloomberg（密度即信任）、Stripe（金融严肃感+编辑级打磨）、实验记录簿/示波器（印章与 schematic 语法）。两张 AI 生成方向稿（深色星图 vs 浅色账本）由用户生图产出；v3 曾选浅色账本，v4 经用户对照实机截图后裁定：**结构取账本，身份取夜航**——即 Night Ledger。
+
+**v4.1 视觉规格来源**：用户提供的 Grok App Builder 原型（仓库根 `THhdE8o3NRn9RAPU-grok-workspace/`，已 .gitignore，不进构建、不装依赖）。收割其色板（void/night/panel/mist/signal/teal/coral）、星云星空、面板/辉光/圆角语法、shimmer 骨架与后果句式文案语气；**否决**其整体替换（假数据 zustand 种子、TanStack Start 异框架、被否决的旧四页 IA、Grok 平台包袱）。航海隐喻词表维持禁用——原型文案里的 docked/sailed/fleet 一律不收。
