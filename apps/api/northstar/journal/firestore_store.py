@@ -30,12 +30,17 @@ class FirestoreStore:
         self._db.collection("journal").document(event.id).set(event.model_dump())
 
     def events(self, kinds: Iterable[str] | None = None, limit: int = 200) -> list[JournalEvent]:
-        q = self._db.collection("journal").order_by("ts", direction="DESCENDING").limit(limit)
+        # Semantics must match LocalJsonStore: `limit` counts events of the
+        # requested kinds, not raw documents. Filtering server-side would need
+        # a composite index (kind, ts), so we over-fetch and trim instead -
+        # bounded, and no "config change only" promise gets broken by indexes.
+        kindset = set(kinds) if kinds else None
+        fetch = limit if kindset is None else min(max(limit * 5, 500), 2000)
+        q = self._db.collection("journal").order_by("ts", direction="DESCENDING").limit(fetch)
         docs = [d.to_dict() for d in q.stream()]
         out = [JournalEvent.model_validate(d) for d in docs]
-        if kinds:
-            kindset = set(kinds)
-            out = [e for e in out if e.kind in kindset]
+        if kindset is not None:
+            out = [e for e in out if e.kind in kindset][:limit]
         return out
 
     def save(self, collection: str, doc_id: str, doc: dict[str, Any]) -> None:

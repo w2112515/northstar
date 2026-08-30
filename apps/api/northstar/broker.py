@@ -52,6 +52,11 @@ def get_clock() -> dict[str, Any]:
 
 def get_account_summary() -> dict[str, Any]:
     a = trading_client().get_account()
+    lvl = getattr(a, "options_trading_level", None)
+    try:
+        options_level = int(getattr(lvl, "value", lvl) or 0)
+    except (TypeError, ValueError):
+        options_level = 0
     return {
         "account_role": get_settings().account_role,
         "paper": True,
@@ -59,7 +64,7 @@ def get_account_summary() -> dict[str, Any]:
         "last_equity": float(a.last_equity),
         "cash": float(a.cash),
         "buying_power": float(a.buying_power),
-        "options_level": getattr(a, "options_trading_level", None),
+        "options_level": options_level,
         "status": str(a.status),
     }
 

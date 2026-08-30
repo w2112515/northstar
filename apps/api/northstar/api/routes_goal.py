@@ -79,3 +79,51 @@ def current() -> dict:
     plan = sorted(plans, key=lambda p: p["created_at"])[-1]
     goal = store.get("goals", plan["goal_id"])
     return {"plan": plan, "goal": goal}
+
+
+@router.get("/bands")
+def bands() -> dict:
+    """Monte Carlo cone for the COMMITTED goal, so the Track hero can draw
+    plan-vs-reality without re-posting the wizard body. Cached per plan per
+    UTC day: plan_goal re-fetches market data and re-simulates, and the Track
+    page polls this endpoint every 60s."""
+    from datetime import datetime, timezone
+
+    from northstar.goalplanner import plan_goal
+
+    store = get_store()
+    plans = [p for p in store.list("plans") if p.get("status") == "active"]
+    if not plans:
+        return {"bands": None}
+    plan = sorted(plans, key=lambda p: p["created_at"])[-1]
+    goal_doc = store.get("goals", plan["goal_id"])
+    if not goal_doc:
+        return {"bands": None}
+
+    cache_key = f"goal_bands_{plan['id']}"
+    today = datetime.now(timezone.utc).date().isoformat()
+    cached = store.get("state", cache_key)
+    if cached and cached.get("date") == today:
+        return {k: cached.get(k) for k in _BANDS_KEYS}
+
+    goal = Goal(**goal_doc)
+    _plan, extras = plan_goal(goal)
+    bands_doc = extras.get("bands")
+    # monte_carlo_goal short-circuits with None subfields on thin data -
+    # never hand the UI a bands object it cannot draw
+    if not isinstance(bands_doc, dict) or bands_doc.get("p50") is None:
+        bands_doc = None
+    doc = {
+        "bands": bands_doc,
+        "months": extras.get("months"),
+        "target_amount": extras.get("target_amount"),
+        "data_note": extras.get("data_note"),
+        "start": plan.get("created_at"),
+        "base": goal.capital_base,
+        "date": today,
+    }
+    store.save("state", cache_key, doc)
+    return {k: doc.get(k) for k in _BANDS_KEYS}
+
+
+_BANDS_KEYS = ("bands", "months", "target_amount", "data_note", "start", "base")

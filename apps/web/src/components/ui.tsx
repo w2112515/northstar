@@ -1,89 +1,193 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
-export function Card({
+/* EVIDENCE v1 primitives - docs/DESIGN.md v3.
+   Ruled sections instead of card waterfalls; stamps for verdicts; field
+   notes for AI attribution. One accent (indigo), hairlines for structure. */
+
+// ------------------------------------------------------------------ Section
+
+/** The base layout unit: a hairline top rule + micro mono label + content
+ *  sitting directly on the paper. Replaces the old bordered Card. */
+export function Section({
+  title,
+  hint,
+  info,
+  actions,
   children,
   className = "",
-  accent,
+  id,
 }: {
+  title: string;
+  /** right-aligned micro note on the section rule */
+  hint?: string;
+  /** full explainer behind a hover/focus ⓘ */
+  info?: string;
+  /** section-level actions, right-aligned on the rule */
+  actions?: ReactNode;
   children: ReactNode;
   className?: string;
-  accent?: "gold" | "teal" | "coral" | "none";
+  id?: string;
 }) {
-  const ring =
-    accent === "gold"
-      ? "border-gold/40"
-      : accent === "teal"
-        ? "border-teal/40"
-        : accent === "coral"
-          ? "border-coral/50"
-          : "border-line";
   return (
-    <div className={`rounded-2xl border ${ring} bg-surface p-5 ${className}`}>
+    <section id={id} className={className}>
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline pb-3 pt-2">
+        <h2 className="font-mono text-micro font-semibold uppercase tracking-[0.14em] text-ink2">
+          {title}
+        </h2>
+        {info ? <InfoNote text={info} /> : null}
+        {hint ? <span className="ml-auto font-mono text-micro text-ink2">{hint}</span> : null}
+        {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-export function SectionTitle({ children, sub }: { children: ReactNode; sub?: string }) {
+/** Section explainers as an inline disclosure, not a title tooltip: native
+ *  tooltips don't appear on keyboard focus and can't be read at length. */
+function InfoNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="mb-3">
-      <h2 className="text-sm font-semibold uppercase tracking-widest text-muted">{children}</h2>
-      {sub ? <p className="mt-1 text-xs text-muted/70">{sub}</p> : null}
-    </div>
+    <span className="contents">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="About this section"
+        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-hairline text-micro text-ink2 hover:text-ink"
+      >
+        i
+      </button>
+      {open && (
+        <span className="block w-full border-l-2 border-hairline py-0.5 pl-3 text-body leading-relaxed text-ink2">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
 
-export function Stat({
-  label,
-  value,
-  tone = "ink",
-  hint,
-}: {
-  label: string;
-  value: ReactNode;
-  tone?: "ink" | "teal" | "coral" | "gold" | "muted";
-  hint?: string;
-}) {
-  const color =
-    tone === "teal"
-      ? "text-teal"
-      : tone === "coral"
-        ? "text-coral"
-        : tone === "gold"
-          ? "text-gold"
-          : tone === "muted"
-            ? "text-muted"
-            : "text-ink";
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
-      <div className={`mt-0.5 text-xl font-semibold tabular-nums ${color}`}>{value}</div>
-      {hint ? <div className="mt-0.5 text-[11px] text-muted/70">{hint}</div> : null}
-    </div>
-  );
-}
+// -------------------------------------------------------------------- Stamp
 
-export function Chip({
-  children,
-  tone = "line",
-}: {
-  children: ReactNode;
-  tone?: "line" | "gold" | "teal" | "coral" | "blue" | "amber";
-}) {
+export type StampTone = "red" | "green" | "amber" | "indigo" | "plain";
+
+/** A verdict stamp: rectangular, bordered, monospaced uppercase. The visual
+ *  signature of the ledger - decisions look like they were stamped. */
+export function Stamp({ children, tone = "plain" }: { children: ReactNode; tone?: StampTone }) {
   const cls = {
-    line: "border-line text-muted",
-    gold: "border-gold/50 text-gold",
-    teal: "border-teal/50 text-teal",
-    coral: "border-coral/60 text-coral",
-    blue: "border-skyblue/50 text-skyblue",
-    amber: "border-amber/60 text-amber",
+    red: "border-red/70 text-red",
+    green: "border-green/70 text-green",
+    amber: "border-amber/70 text-amber",
+    indigo: "border-indigo/70 text-indigo",
+    plain: "border-ink2/40 text-ink2",
   }[tone];
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+    <span
+      className={`inline-flex shrink-0 items-center border bg-transparent px-1.5 py-px font-mono text-micro font-semibold uppercase tracking-[0.12em] ${cls}`}
+    >
       {children}
     </span>
   );
 }
+
+/** Map a journal event to its ledger stamp. The verdict payload's
+ *  discriminator is `verdict: "approved" | "rejected" | "needs_human"`
+ *  (GateVerdict, domain.py); anything unknown falls back to the kind label. */
+export function eventStamp(e: { kind: string; payload?: Record<string, unknown> }): {
+  label: string;
+  tone: StampTone;
+} {
+  const p = (e.payload ?? {}) as Record<string, unknown>;
+  switch (e.kind) {
+    case "fill":
+      return { label: "FILLED", tone: "green" };
+    case "pnl": {
+      const v = Number(p.realized ?? p.pnl ?? p.value ?? 0);
+      return { label: v >= 0 ? "+P&L" : "-P&L", tone: v >= 0 ? "green" : "red" };
+    }
+    case "verdict": {
+      if (p.verdict === "rejected") return { label: "REJECTED", tone: "red" };
+      if (p.verdict === "approved") return { label: "APPROVED", tone: "green" };
+      if (p.verdict === "needs_human") return { label: "NEEDS YOU", tone: "amber" };
+      return { label: "VERDICT", tone: "plain" };
+    }
+    case "approval":
+      return { label: "NEEDS YOU", tone: "amber" };
+    case "order":
+      return { label: "ORDER", tone: "plain" };
+    case "proposal":
+      return { label: "PROPOSAL", tone: "plain" };
+    case "forecast":
+      return { label: "FORECAST", tone: "plain" };
+    case "scout":
+      return { label: "SCOUT", tone: "plain" };
+    case "debate":
+      return { label: "DEBATE", tone: "plain" };
+    case "digest":
+      return { label: "BRIEF", tone: "plain" };
+    case "experiment":
+      return { label: "EXPERIMENT", tone: "plain" };
+    case "trace":
+      return { label: "TRACE", tone: "plain" };
+    default:
+      return { label: e.kind.toUpperCase(), tone: "plain" };
+  }
+}
+
+// --------------------------------------------------------------- FieldNote
+
+/** AI attribution is a texture, not a color: serif italic narration on a
+ *  faint wash, with a monospaced signature line. Deterministic facts never
+ *  wear this costume. */
+export function FieldNote({
+  by,
+  ts,
+  meta,
+  children,
+}: {
+  /** e.g. "gemini" or "template" - always labeled, never hidden */
+  by: string;
+  ts?: string;
+  meta?: string;
+  children: ReactNode;
+}) {
+  return (
+    <figure className="border-l-2 border-indigo/30 bg-indigo/[0.04] px-4 py-3">
+      <blockquote className="font-serif text-body italic leading-relaxed text-ink/90">
+        {children}
+      </blockquote>
+      <figcaption className="mt-1.5 font-mono text-micro text-ink2">
+        narrated by {by}
+        {ts ? ` · ${ts}` : ""}
+        {meta ? ` · ${meta}` : ""} · AI narration, not a decision
+      </figcaption>
+    </figure>
+  );
+}
+
+// --------------------------------------------------------------- PageHeader
+
+/** One h1 per page. Pages declare who they are. */
+export function PageHeader({
+  title,
+  sub,
+  actions,
+}: {
+  title: string;
+  sub?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-page font-semibold tracking-tight">{title}</h1>
+        {sub ? <p className="mt-1 max-w-2xl text-body text-ink2">{sub}</p> : null}
+      </div>
+      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------- Button
 
 export function Button({
   children,
@@ -101,42 +205,68 @@ export function Button({
   className?: string;
 }) {
   const styles = {
+    // text-raised inverts with the theme: white on indigo in the light
+    // ledger, dark on the lifted indigo inside the dark /start room
     primary:
-      "bg-gold text-night font-semibold hover:bg-gold/90 disabled:opacity-40 disabled:cursor-not-allowed",
+      "bg-indigo text-raised font-semibold hover:bg-indigo/90 disabled:opacity-40 disabled:cursor-not-allowed",
     ghost:
-      "border border-line text-ink hover:border-gold/60 hover:text-gold disabled:opacity-40",
-    subtle: "bg-surface2 text-ink hover:bg-line/60 disabled:opacity-40",
-    danger: "border border-coral/60 text-coral hover:bg-coral/10 disabled:opacity-40",
+      "border border-hairline text-ink hover:border-ink/40 disabled:opacity-40",
+    subtle: "bg-inset text-ink hover:bg-hairline/50 disabled:opacity-40",
+    danger: "border border-red/60 text-red hover:bg-red/5 disabled:opacity-40",
   }[variant];
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-4 py-2 text-sm transition-colors ${styles} ${className}`}
+      className={`rounded-sm px-4 py-2 text-body transition-colors ${styles} ${className}`}
     >
       {children}
     </button>
   );
 }
 
-export function PaperBadge() {
+// ---------------------------------------------------------------- PaperTag
+
+/** Always visible: this is practice money. Amber = waiting/attention class. */
+export function PaperTag() {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-amber/70 bg-amber/10 px-3 py-1 text-[11px] font-bold tracking-wider text-amber"
+      className="inline-flex items-center gap-1.5 border border-amber/70 bg-amber/10 px-2 py-0.5 font-mono text-micro font-semibold uppercase tracking-[0.12em] text-amber"
       title="Practice account with simulated money. No real dollars are at risk."
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-amber" />
-      PAPER · practice money
+      PAPER
     </span>
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body?: string }) {
+// --------------------------------------------------------------- EmptyState
+
+/** Borderless: a ledger records absence with one line, not a dashed box. */
+export function EmptyState({ title, body, action }: { title: string; body?: string; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-line px-6 py-10 text-center">
-      <div className="text-sm font-medium text-muted">{title}</div>
-      {body ? <div className="mx-auto mt-1 max-w-md text-xs text-muted/70">{body}</div> : null}
+    <div className="py-8 text-center">
+      <div className="font-mono text-micro uppercase tracking-[0.12em] text-ink2">{title}</div>
+      {body ? <div className="mx-auto mt-1.5 max-w-md text-body text-ink2">{body}</div> : null}
+      {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------- Skeleton
+
+/** Static ruled lines while the first fetch lands - no pulsing, a ledger
+ *  does not shimmer. */
+export function Skeleton({ rows = 3, className = "" }: { rows?: number; className?: string }) {
+  return (
+    <div className={`space-y-2.5 ${className}`} aria-hidden>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="h-3.5 bg-hairline/60"
+          style={{ width: `${88 - ((i * 17) % 40)}%` }}
+        />
+      ))}
     </div>
   );
 }

@@ -69,6 +69,76 @@ def momentum_backtest(
     return (port - costs).iloc[lookback_days + 1:]
 
 
+# --------------------------------------------------------------------------- rsi mean reversion
+
+def rsi_reversion_backtest(
+    bars: dict[str, pd.DataFrame],
+    rsi_period: int = 2,
+    entry_rsi: float = 10,
+    exit_rsi: float = 70,
+    trend_sma: int = 200,
+    max_names: int = 3,
+    cost_bps: float = 5.0,
+) -> pd.Series:
+    """Fixed 1/max_names slot per active position; idle capital earns 0.
+
+    Signals mirror strategies/meanrev.py exactly: enter RSI<entry above trend,
+    exit RSI>exit or trend break. Signal on close, position from next day.
+    """
+    from northstar.indicators import rsi as rsi_fn
+
+    closes = close_frame(bars)
+    rets = closes.pct_change()
+    in_pos = pd.DataFrame(0.0, index=closes.index, columns=closes.columns)
+    for sym in closes.columns:
+        c = closes[sym].dropna()
+        if len(c) < trend_sma + 5:
+            continue
+        r = rsi_fn(c, rsi_period)
+        trend = c.rolling(trend_sma).mean()
+        entry = (r < entry_rsi) & (c > trend)
+        exit_ = (r > exit_rsi) | (c < trend)
+        state = pd.Series(np.nan, index=c.index)
+        state[entry] = 1.0
+        state[exit_] = 0.0
+        in_pos.loc[c.index, sym] = state.ffill().fillna(0.0)
+
+    weights = (in_pos * (1.0 / max(max_names, 1))).clip(upper=1.0)
+    # cap total gross exposure at 100% if more names fire than slots
+    gross = weights.sum(axis=1)
+    scale = (1.0 / gross).clip(upper=1.0).replace([np.inf, -np.inf], 1.0)
+    weights = weights.mul(scale, axis=0)
+    weights = weights.shift(1).fillna(0.0)      # trade next day, no lookahead
+
+    port = (weights * rets).sum(axis=1)
+    costs = weights.diff().abs().sum(axis=1).fillna(0.0) * (cost_bps / 10_000)
+    return (port - costs).iloc[trend_sma + 1:]
+
+
+# --------------------------------------------------------------------------- ma cross trend
+
+def ma_cross_backtest(
+    bars: dict[str, pd.DataFrame],
+    fast: int = 20,
+    slow: int = 100,
+    cost_bps: float = 5.0,
+) -> pd.Series:
+    """Equal weight across names whose fast SMA > slow SMA. Next-day execution."""
+    closes = close_frame(bars)
+    rets = closes.pct_change()
+    fast_ma = closes.rolling(fast).mean()
+    slow_ma = closes.rolling(slow).mean()
+    in_pos = (fast_ma > slow_ma).astype(float)
+
+    active = in_pos.sum(axis=1)
+    weights = in_pos.div(active.where(active > 0, 1.0), axis=0)
+    weights = weights.shift(1).fillna(0.0)
+
+    port = (weights * rets).sum(axis=1)
+    costs = weights.diff().abs().sum(axis=1).fillna(0.0) * (cost_bps / 10_000)
+    return (port - costs).iloc[slow + 1:]
+
+
 # --------------------------------------------------------------------------- wheel approximation
 
 def wheel_income_approx(
@@ -110,33 +180,66 @@ def wheel_income_approx(
 
 # --------------------------------------------------------------------------- walk-forward
 
+def _run_family_backtest(family: str, bars: dict, params: dict, cost_bps: float) -> pd.Series:
+    if family == "dsl_rotation":
+        from northstar.dsl import dsl_rotation_backtest
+
+        return dsl_rotation_backtest(bars, params["spec"], cost_bps=cost_bps)
+    if family == "rsi_mean_reversion":
+        return rsi_reversion_backtest(
+            bars,
+            rsi_period=int(params.get("rsi_period", 2)),
+            entry_rsi=float(params.get("entry_rsi", 10)),
+            exit_rsi=float(params.get("exit_rsi", 70)),
+            trend_sma=int(params.get("trend_sma", 200)),
+            max_names=int(params.get("max_names", 3)),
+            cost_bps=cost_bps,
+        )
+    if family == "ma_cross_trend":
+        return ma_cross_backtest(
+            bars,
+            fast=int(params.get("fast", 20)),
+            slow=int(params.get("slow", 100)),
+            cost_bps=cost_bps,
+        )
+    return momentum_backtest(
+        bars,
+        lookback_days=int(params.get("lookback_days", 90)),
+        top_n=int(params.get("top_n", 3)),
+        rebalance_days=int(params.get("rebalance_days", 5)),
+        cost_bps=cost_bps,
+    )
+
+
+def _warmup_days(family: str, params: dict) -> int:
+    """Bars the OOS window needs BEFORE its first tradable day (indicator burn-in)."""
+    if family == "dsl_rotation":
+        from northstar.dsl import WARMUP_DAYS
+
+        return WARMUP_DAYS
+    if family == "rsi_mean_reversion":
+        return int(params.get("trend_sma", 200))
+    if family == "ma_cross_trend":
+        return int(params.get("slow", 100))
+    return int(params.get("lookback_days", 90))
+
+
 def walk_forward_eval(
     bars: dict[str, pd.DataFrame],
     params: dict,
+    family: str = "momentum_rotation",
     oos_frac: float = 0.3,
     cost_bps: float = 5.0,
 ) -> dict:
-    """IS/OOS split evaluation for a momentum param set. OOS is the headline."""
+    """IS/OOS split evaluation for one strategy param set. OOS is the headline."""
     closes = close_frame(bars)
     split = int(len(closes) * (1 - oos_frac))
+    warmup = _warmup_days(family, params) + 5
     is_bars = {s: df[df.index.isin(closes.index[:split])] for s, df in bars.items()}
-    oos_bars = {s: df[df.index.isin(closes.index[split - int(params.get("lookback_days", 90)) - 5:])]
-                for s, df in bars.items()}
+    oos_bars = {s: df[df.index.isin(closes.index[max(split - warmup, 0):])] for s, df in bars.items()}
 
-    r_is = momentum_backtest(
-        is_bars,
-        lookback_days=int(params.get("lookback_days", 90)),
-        top_n=int(params.get("top_n", 3)),
-        rebalance_days=int(params.get("rebalance_days", 5)),
-        cost_bps=cost_bps,
-    )
-    r_oos = momentum_backtest(
-        oos_bars,
-        lookback_days=int(params.get("lookback_days", 90)),
-        top_n=int(params.get("top_n", 3)),
-        rebalance_days=int(params.get("rebalance_days", 5)),
-        cost_bps=cost_bps,
-    )
+    r_is = _run_family_backtest(family, is_bars, params, cost_bps)
+    r_oos = _run_family_backtest(family, oos_bars, params, cost_bps)
     m_is, m_oos = metrics(r_is), metrics(r_oos)
     return {
         "is": m_is,
@@ -145,7 +248,8 @@ def walk_forward_eval(
         "is_returns": r_is,
         "data_note": (
             f"Alpaca IEX daily bars, {closes.index[0].date()} to {closes.index[-1].date()}; "
-            f"costs {cost_bps}bps on turnover; OOS = last {oos_frac:.0%} (never used for tuning)."
+            f"{family} rules; costs {cost_bps}bps on turnover; "
+            f"OOS = last {oos_frac:.0%} (never used for tuning)."
         ),
     }
 

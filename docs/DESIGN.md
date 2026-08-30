@@ -1,89 +1,91 @@
 # NorthStar — 前端设计与视觉概念
 
-> 状态：v1，2026-08-30。本文件是交互结构与视觉方向的唯一 owner。
-> 平台决定：**Web 桌面优先**（两个赛道评委都在桌面看在线 demo；lablab 要求可在线使用的原型），1280px 主设计，平板/手机降级可用不精修。界面语言：**英文**（国际评委），术语 tooltip 内置人话解释。
+> 状态：v3，2026-08-31（EVIDENCE v1：彻底重构。v1/v2 的 Night Voyage 夜航体系作废——航海隐喻、深色驾驶舱、卡片瀑布全部退役，仅留档于 git 历史）。
+> 本文件是交互结构与视觉方向的唯一 owner。审计见 `docs/FRONTEND_AUDIT.md`。
+> 平台决定：**Web 桌面优先**，1280px 主设计，平板/手机降级可用不精修。界面语言：**英文**，术语 tooltip 内置人话解释。
 
-## 1. 信息架构
+## 0. 设计主张
 
-全局导航（左侧栏，5 项）：
-1. **Home 驾驶舱** — 日常查看（Path B）与待决策（Path C）
-2. **Strategies 策略** — 目录、我的组合、策略详情
-3. **Lab 进化实验室** — 实验队列、族谱、晋级审批
-4. **Journal 航行日志** — 全量血缘与风控裁决
-5. **Settings** — 目标与护栏、kill switch、账户
+**界面回答一个问题："你能不能到达，凭什么？"** 每个数字可溯源、每个决策有裁决、每个预测被打分。视觉语言 = **工程实验记录簿（Lab Ledger）**：纸面、墨字、格线、盖章。
 
-全局顶栏（每屏可见）：**PAPER 徽章**（高可见，杏黄描边）· 组合净值与今日变动 · 断路器状态灯（绿/黄/红）· 待决策红点。
-首次进入未设目标 → 强制走 Onboarding 向导（S1）。
+**分工式融合**：`/start` 向导是唯一深色房间（星空、轨道弧——"承诺"）；主应用是浅色账本（"证据"）。叙事弧：梦 → 证。产品名唯一的视觉回声 = 目标线端点的小四角星。
 
-## 2. 关键屏
+## 1. 信息架构（按用户的问题组织）
 
-### S1 · Onboarding 向导（4 步，Path A）
-- 主对象：目标（Goal）。主动作：完成设定并启动。
-- 步骤 1 目标：两种输入模式切换——"到某天赚到多少"（金额+期限）/"每月多赚多少"。大数字输入，即时换算年化收益率。
-- 步骤 2 风险三问：卡片单选（跌 15% 你会？/ 这笔钱多久不用？/ 有没有交易经验）→ 风险档。
-- 步骤 3 **计划提案（demo 高光屏）**：
-  - 达成概率仪表（基于回测分布+蒙特卡洛，脚注"历史估计非承诺"）；
-  - 最大回撤预告（"最坏情况下某个月你会看到 −$X，你能接受吗"）；
-  - 策略组合构成（分配环 + 每策略一句人话）；
-  - 与"定投 SPY"基线的对比曲线；
-  - 两个主动作：**Start（模拟盘）** / Adjust（回到滑块，护栏内可调）。
-  - **不现实目标的红色路径**："12 个月翻倍需要年化 100%+；这套组合历史最好年份 +34%。两个诚实选项：延长期限到 3 年，或把目标降到 +20%。"不允许硬来。
-- 步骤 4 启动确认：PAPER 教育（"先用 $100k 模拟资金验证，赚的亏的都是模拟"）。
-- 状态：目标可行性计算 loading（<2s，骨架屏）；数据不可用 → 声明并禁用启动。
+顶栏导航 4 项：
 
-### S2 · Home 驾驶舱
-- 主对象：目标进度。主动作：无（查看即完成）；次动作：处理待决策卡。
-- 布局（自上而下）：
-  1. Hero：**北极星轨道图**——起点→当前净值→目标，进度沿轨道推进；剩余天数与所需月均收益随行标注；
-  2. 今日舰队日报（三句人话：做了什么/为什么/明天打算）；
-  3. 待决策卡片区（有则显示，审批倒计时可见，超时=拒绝）；
-  4. 持仓概览（按策略分组的紧凑列表：策略名/标的/人话状态/浮动盈亏）；
-  5. 舰队动态 feed（时间线：事件→动作→为什么，每条可展开血缘）。
-- 状态：首日 empty（"舰队正在等待开盘"，显示计划与开盘倒计时）；断路器触发（全局红条：原因/暂停范围/恢复条件/人工恢复按钮）；数据断流（只读降级声明）。
+| 路由 | 名称 | 回答的问题 | 内容 |
+|---|---|---|---|
+| `/start` | 向导（深色房间） | 我要去哪？ | 四步：目的地（轨道弧）→ 风险三问 → 诚实计划（概率+锥形图+诚实替代方案红路径）→ Begin |
+| `/` | **Track** | 我在轨道上吗？ | hero（72px 净值 + ProbStrip 终端分位条 + TrajectoryHero 计划vs现实锥形图）→ Needs you（审批+顾问倾斜，统一决策区）→ Today（daily brief，AI 叙述走 FieldNote）→ Positions + queued orders |
+| `/activity` | **Activity** | 它在干什么？ | 上下文条（regime/weather/开盘/autopilot/scout）→ Live run schematic（ADK 工作流浅色 schematic）→ Market（纸面蜡烛图）→ Event stream（小印章行）→ Controls（autopilot/run/kill） |
+| `/proof` | **Proof** | 我凭什么信它？ | 印章账本（按日分组/筛选/搜索/展开 JSON）→ 预测打分（coverage/pinball + 扇形图）→ 闸门拒绝统计 → 辩论记录 |
+| `/system` | **System** | 机器怎么运转？ | 策略规格表（非卡片）+ 实例表 → 进化（晋级候选/实验账本）→ 因子挖掘 → 气象验证 → 家族 regime 统计 |
 
-### S3 · Strategies 策略
-- 目录：卡片网格。每卡：策略名+人话一句+风险档徽章+回测迷你曲线+"加入组合"。
-- 我的组合：分配比例条（护栏内可拖）+ 每策略贡献归因。
-- 策略详情：回测全图（含基线虚线对比、样本内/外分界线）+ 参数表（当前值+护栏范围，只读为主）+ 血缘 tab（这个策略从哪个版本进化来，证据链接）。
+旧路由 `/research` `/strategies` `/journal` `/lab` `/onboarding` 全部 307 redirect。
 
-### S4 · Lab 进化实验室
-- 实验队列：进行中实验（阶段徽章：提议中/回测中/模拟盘试运行 D2/…）。
-- 族谱树：v1→v1.2→v2 分支图，节点=版本（假设一句+样本外分数），当前冠军金色描边。（时间不够降级为表格，见 ROADMAP 砍序。）
-- **晋级审批卡（demo 高光）**：现任 vs 挑战者对比表（样本外 Sharpe/回撤/胜率/试运行 P&L+plan-vs-execution 偏差），主动作 Approve / Ignore，倒计时。
+## 2. 视觉契约
 
-### S5 · Journal 航行日志
-- 全血缘表：时间/事件/提案/**闸门裁决（含拒绝理由码，拒绝也是一等记录）**/订单/成交/P&L。
-- 过滤器（按策略/按结果/只看拒绝）；每行可展开原始 JSON（专业下钻）。
-- 这是"信任来自透明"的落点，也是 Alpaca write-up 的素材来源。
+### 色板（语义锁死，违反即 review 打回）
+
+| token | 值 | 唯一语义 |
+|---|---|---|
+| `paper` | `#FAF9F6` | 页面底 |
+| `raised` | `#FFFFFF` | 唯一允许的面板（待审批、浮层） |
+| `inset` | `#F3F1EA` | 图表底板、代码块 |
+| `ink` / `ink-2` | `#16181D` / `#565D6B` | 主文字 / 次要文字 |
+| `hairline` | `#E4E1D8` | 格线——唯一分层手段 |
+| `indigo` | `#2B4BD8` | **唯一主强调**：目标、主 CTA、实际净值线、champion、focus ring |
+| `red` | `#C63B3B` | 拒绝/亏损/危险——印章形态 |
+| `green` | `#1E8E5A` | 成交/盈利/验证通过 |
+| `amber` | `#B0770F` | 等待人类（审批、待决、PAPER 标记） |
+
+**AI 归因不用颜色，用质地**：AI 叙述 = `FieldNote`（浅靛灰底 + 衬线斜体 + mono 签名行 "narrated by gemini · … · AI narration, not a decision"）；确定性事实 = 正排 mono。两者永不混淆。
+
+### 排版
+
+Geist Sans（UI）+ Geist Mono（全部数字/标签/印章，tabular-nums）+ 系统衬线（Georgia italic，仅 FieldNote 与 schematic 的 `Ai` 签）。六档 token，禁用任意值：`micro 11` / `body 13` / `section 15` / `page 20` / `display 32` / `hero clamp(44px, 9vw, 72px)`。
+
+### 布局语法
+
+- 页面 = 纸面上的横格线分区（`Section`：hairline 顶线 + micro mono 大写节标 + 内容直接坐在纸上）。只有真正独立的内容（待审批）才配 `raised` 白面板。
+- 账本行签名版式：`[Stamp 96px | 内容 1fr | 时间戳 mono 右对齐]`，展开见原始 JSON。
+- 顶栏单行：wordmark · 4 项导航 · 净值+今日Δ · ProgressRuler 细进度尺 · 琥珀 "N need you" · kill 印章 · NY 时钟 · PAPER 标记。sticky。
+- 容器 `max-w-6xl`。
+
+### 签名元素
+
+1. **TrajectoryHero**：真实净值曲线（indigo）叠蒙特卡洛锥（p10–p90 灰扇 + p50 虚线），目标虚线直尺 + 端点小星标。计划 vs 现实同屏。
+2. **Stamp**：描边大写 mono 印章——`REJECTED` 红 / `FILLED` 绿 / `NEEDS YOU` 琥珀 / `PROMOTED`/`CHAMPION` 靛。`eventStamp()` 把 journal 事件映射成印章。
+3. **ProbStrip**：终端分位横条（rough/median/lucky 三刻度 + 目标星标 + "estimate, not a promise" 脚注）。
+4. **FieldNote**：AI 归因块（见上）。
+5. **ProgressRuler**：顶栏细进度尺。
+
+### 动效
+
+近乎零。仅：新账条 `flash` 600ms 高亮、印章 `stamp-in` 180ms、schematic 节点 150ms 切换。深色房间内允许星星 `twinkle` 与船位 `pulse-slow`。全部 `prefers-reduced-motion` 关闭。
+
+### 可访问性
+
+浅底墨字天然过 AA；focus = 全局 2px indigo ring；印章是文字不是颜色；涨跌带 +/− 符号；`<html translate="no">` 防自动翻译。
 
 ## 3. 文案原则
 
-- 人话优先，术语必带 tooltip（"权利金 = 别人为这份承诺付给你的钱"）。
-- 动作句式统一：做了什么 + 为什么 + 影响。
-- **禁词表**：保证、稳赚、必胜、无风险、躺赚（代码级 lint，出现即 CI 失败）。
-- 概率与收益永远带"基于历史估计"脚注。
-- 数字：tabular-nums；涨跌带 +/− 与箭头（不只靠颜色，色盲安全）。
+- 人话优先，术语必带 tooltip；动作句式统一：做了什么 + 为什么 + 影响。
+- **禁词表**：保证、稳赚、必胜、无风险、躺赚。
+- **隐喻黑名单**（v3 起执行）：captain / voyage / fleet / helm / sail / dock / on board / waiting on you。替换：Daily brief / Plan progress / the system / Controls / Enable / Pause / Positions / Needs you。
+- 概率与收益永远带"基于历史估计"脚注；数字 tabular-nums；涨跌带 +/−。
 
-## 4. 视觉契约（轻量）
+## 4. 组件与实现注记
 
-**主张：夜航驾驶舱（Night Voyage）**——你在深夜看一眼，舰队正替你航行。第一眼看到目标进度（北极星金）与安全感（PAPER 徽章、断路器绿灯）；下一步看到今日人话日报。
+- 栈：Next.js 16 + Tailwind 4 + SWR + recharts + lightweight-charts + @xyflow/react + lucide（仅必要时）。
+- 组件层：`ui.tsx`（Section/Stamp/FieldNote/Ledger 行/Button/EmptyState/Skeleton/PaperTag/PageHeader）、`trajectory.tsx`（TrajectoryHero/ProbStrip）、`schematic.tsx`（RunSchematic/DebatePanel/ForecastFan）、`systems.tsx`（System 页四区）、`orbit.tsx`（仅 /start）、`topbar.tsx`/`chrome.tsx`。
+- 图表主题单一来源：`lib/theme.ts`（CHART 浅色 + CHART_DARK 深色房间），与 globals.css 同步；图表层禁止就地定义色值。
+- 领域类型单一来源：`lib/types.ts`。
+- 数据层：`lib/data.ts`（SWR 单飞轮询 + northstar:refresh 桥）。
+- 深色房间机制：`.start-dark` 作用域变量覆盖（@theme inline 的 var 引用在运行时解析，整个页面自动换肤）。
+- 验收：1280/768 两宽五页截图；needs-you / kill-ON / 红路径 / 空账 四态留证；lint + build 绿；旧路由 redirect 生效。
 
-- **底色**：深空蓝黑 `#0A0F1E`；面板 `#0F172A` / `#111827` 两级层次；边框低对比 `#1E293B`。
-- **强调色**：北极星金 `#F5C542` **只用于"星时刻"**（目标进度、晋级、冠军策略）——克制使用形成仪式感；涨 `#22C55E` 跌 `#EF4444`（美股惯例绿涨红跌）；信息蓝 `#38BDF8` 用于 AI 动作。
-- **排版**：Inter（UI）；数字用 tabular 变体，目标大数字 48–64px；正文 14–16px。
-- **图形语言**：细线星图/轨道隐喻——目标进度=轨道环，策略族谱=星系树；图表克制（面积图+基线虚线），无装饰粒子。
-- **动效**：数字入场滚动一次、feed 项滑入、审批卡轻脉冲；全部服务状态变化，不做氛围动画。
-- **可访问性**：正文对比 ≥ 4.5:1；焦点可见；涨跌不只靠色。
+## 5. 参考来源说明（诚实声明）
 
-**参考来源说明（诚实声明）**：Mobbin MCP 需付费方案，本轮未能取得截图参照。视觉与交互参照来自已核验的产品模式与类目惯例，只借鉴模式不复制表面：
-- [Composer](https://www.composer.trade/)：策略卡片目录、回测与基线对比、自然语言创建策略的心智；
-- [Option Alpha](https://optionalpha.com/bots)：机器人模板、护栏（allocations/position limits）、"automation logs 全透明"的信任构建；
-- Robo-advisor 类目惯例（Betterment/Wealthfront 一类）：goal-first onboarding、达成概率呈现、风险问卷三问式；
-- 交易类深色驾驶舱惯例：顶栏净值/状态灯、时间线 feed。
-
-## 5. 组件与实现注记
-
-- 栈：Next.js + Tailwind + shadcn/ui + Recharts（v1 无 K 线需求，Recharts 足够）。
-- 关键自定义组件：`GoalOrbit`（轨道进度）、`ProbabilityGauge`、`StrategyCard`、`ApprovalCard`（含倒计时）、`LineageTable`、`CircuitBreakerBanner`、`PaperBadge`、`PlainSpeak`（人话+tooltip 包装器）。
-- 单一深色主题（省时且贴合概念），不做主题切换。
-- 验收：真实浏览器 1280 与 768 宽各截图一轮；空态、断路器态、审批态各留证一张；文案禁词 lint 通过。
+Mobbin MCP 需付费方案，两轮均未能取得截图参照。方向判断参照已核验的产品模式与类目惯例，只借鉴模式不复制表面：Linear（克制与一个强调色）、Vercel（浅色工程美学）、FT/WSJ 印刷图表（纸面金融图表传统）、Bloomberg（密度即信任）、Stripe（金融严肃感+编辑级打磨）、实验记录簿/示波器（印章与 schematic 语法）。两张 AI 生成方向稿（深色星图 vs 浅色账本）由用户生图产出，经对照评审后选定浅色账本为系统、深色星空为向导室。

@@ -31,21 +31,98 @@ from northstar.domain import (
     TradeProposal,
 )
 from northstar.executor import execute_order_plan
+from northstar.exits import plan_exits
 from northstar.gate import GateSnapshot, run_gate
 from northstar.journal import get_store
+from northstar.locks import APPROVAL_LOCK, PASS_LOCK
+from northstar.strategies import analyst as analyst_prog
 from northstar.strategies import catalog_entry
+from northstar.strategies import dsl_rotation as dsl_prog
+from northstar.strategies import macross as macross_prog
+from northstar.strategies import meanrev as meanrev_prog
 from northstar.strategies import momentum as momentum_prog
+from northstar.strategies import spreads as spreads_prog
 from northstar.strategies import wheel as wheel_prog
+from northstar.pnl import reconcile_vanished
 from northstar.strategies.base import EngineContext
+from northstar.weather import get_weather
 
 PROGRAMS = {
+    # wheel program serves all three single-leg income families (mode = strategy_type)
     "wheel": wheel_prog.propose,
-    "cash_secured_put": wheel_prog.propose,   # CSP-only = wheel that never holds shares
+    "cash_secured_put": wheel_prog.propose,
+    "covered_call": wheel_prog.propose,
+    # defined-risk spreads share one program (shape = strategy_type)
+    "bull_put_spread": spreads_prog.propose,
+    "bear_call_spread": spreads_prog.propose,
+    "iron_condor": spreads_prog.propose,
+    # equities
     "momentum_rotation": momentum_prog.propose,
+    "rsi_mean_reversion": meanrev_prog.propose,
+    "ma_cross_trend": macross_prog.propose,
+    # shipyard-built rotation specs (structural evolution output)
+    "dsl_rotation": dsl_prog.propose,
+    # AI (proposes like any strategy; silent without a key)
+    "ai_analyst": analyst_prog.propose,
 }
 
 DEFAULT_WEIGHTS = {"wheel": 0.5, "momentum_rotation": 0.3}
+TRIAL_WEIGHT = 0.1  # allocation cap for instances on paper trial
 DEFAULT_GUARDRAILS = Guardrails(max_loss_per_trade_pct=0.01)
+
+# Equity rotation sleeves get a hard budget at the gate: existing sleeve value
+# + new buy must stay under weight * equity * slack. The slack absorbs honest
+# appreciation drift; without it, winners would block their own rebalance.
+EQUITY_SLEEVE_FAMILIES = ("momentum_rotation", "rsi_mean_reversion", "ma_cross_trend", "dsl_rotation")
+SLEEVE_SLACK = 1.10
+
+
+def family_weight(family: str, plan: Plan | None) -> float:
+    """One source of truth for a family's allocation weight (plan first)."""
+    if plan:
+        for a in plan.allocations:
+            if a.strategy_id == family:
+                return a.weight
+    return DEFAULT_WEIGHTS.get(family, 0.2)
+
+
+def sleeve_accounting(
+    store, plan: Plan | None, equity: float, positions: list[dict[str, Any]]
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Per-family $ budget and current $ exposure for equity rotation sleeves.
+
+    Exposure attribution: an equity position belongs to a family when its
+    symbol is in that family's trading universe - including the scout pool for
+    scout-enabled families, so radar buys count against the budget too.
+    Overlapping universes count the position in both sleeves - conservative
+    on purpose.
+    """
+    from northstar.scout import scout_recent_pool, scout_symbols
+
+    scout_pool = set(scout_symbols(store)) | set(scout_recent_pool(store))
+    budgets: dict[str, float] = {}
+    exposure: dict[str, float] = {}
+    for doc in store.list("instances"):
+        fam = str(doc.get("family", ""))
+        if fam not in EQUITY_SLEEVE_FAMILIES:
+            continue
+        if not doc.get("enabled", True) or doc.get("status") not in ("champion", "trial"):
+            continue
+        weight = family_weight(fam, plan)
+        if doc.get("status") == "trial":
+            weight = min(weight, TRIAL_WEIGHT)
+        params = doc.get("params") or {}
+        universe = set(params.get("universe", []))
+        if params.get("use_scout", True):
+            universe |= scout_pool
+        held = sum(
+            abs(float(p["market_value"]))
+            for p in positions
+            if p["asset_class"] == "us_equity" and p["symbol"] in universe
+        )
+        budgets[fam] = max(budgets.get(fam, 0.0), equity * weight * SLEEVE_SLACK)
+        exposure[fam] = max(exposure.get(fam, 0.0), held)
+    return budgets, exposure
 
 
 # --------------------------------------------------------------------------- state helpers
@@ -100,6 +177,12 @@ def ensure_default_instances(store) -> list[StrategyInstance]:
 
 # --------------------------------------------------------------------------- snapshot
 
+def _orders_sent_today(store) -> int:
+    today = datetime.now(timezone.utc).date().isoformat()
+    return sum(1 for ev in store.events(kinds=["order"], limit=500)
+               if ev.ts.startswith(today) and "Order sent" in ev.human)
+
+
 def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict[str, Any]]:
     account = get_account_summary()
     positions = get_positions()
@@ -107,6 +190,8 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
     clock = get_clock()
     controls = load_controls(store)
     peak = update_peak_equity(store, account["equity"])
+    # book expiries/assignments/manual closes that happened since the last pass
+    reconcile_vanished(store, positions)
 
     exposure: dict[str, float] = {}
     stock_qty: dict[str, float] = {}
@@ -122,6 +207,8 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
                 exposure[und] = exposure.get(und, 0.0) + abs(p["market_value"])
 
     plan, goal = active_plan(store)
+    weather = get_weather(store)
+    sleeve_budget, sleeve_exposure = sleeve_accounting(store, plan, account["equity"], positions)
     ctx = EngineContext(
         account=account, positions=positions, open_orders=open_orders, plan=plan, goal=goal
     )
@@ -136,6 +223,12 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
         exposure_by_underlying=exposure,
         open_order_symbols=[o["symbol"] for o in open_orders],
         stock_qty_by_symbol=stock_qty,
+        orders_today=_orders_sent_today(store),
+        frozen_symbols=list(controls.get("frozen_symbols", [])),
+        options_level=int(account.get("options_level") or 0),
+        weather_score=weather.get("score") if weather else None,
+        sleeve_budget_by_family=sleeve_budget,
+        sleeve_exposure_by_family=sleeve_exposure,
     )
     return ctx, snap, clock
 
@@ -144,8 +237,13 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
 
 def load_instances_and_bars(store, ctx: EngineContext) -> list[StrategyInstance]:
     """Active strategy instances + the daily bars their programs need."""
+    from northstar.scout import options_watch_symbols, scout_recent_pool, scout_symbols
+
     instances = [i for i in ensure_default_instances(store) if i.enabled and i.status in ("champion", "trial")]
-    bar_symbols: list[str] = []
+    ctx.scout_symbols = scout_symbols(store)
+    ctx.scout_recent_pool = scout_recent_pool(store)
+    ctx.options_watch = options_watch_symbols(store)
+    bar_symbols: list[str] = list(ctx.scout_symbols) + list(ctx.scout_recent_pool) + list(ctx.options_watch)
     for inst in instances:
         bar_symbols += inst.params.get("universe", [])
         bar_symbols += inst.params.get("underlyings", [])
@@ -167,9 +265,16 @@ def collect_proposals(
             weights.get(inst.family) if weights and inst.family in weights
             else DEFAULT_WEIGHTS.get(inst.family, 0.2)
         )
+        if inst.status == "trial":
+            weight = min(weight, TRIAL_WEIGHT)  # paper-trial crews run small until they earn the helm
         if inst.family == "momentum_rotation":
             state = store.get("instance_state", inst.id) or {}
             if not momentum_prog.should_rebalance(state, int(inst.params.get("rebalance_days", 5))):
+                continue
+        if inst.family == "dsl_rotation":
+            state = store.get("instance_state", inst.id) or {}
+            spec_reb = int(((inst.params.get("spec") or {}).get("rebalance_days")) or 5)
+            if not momentum_prog.should_rebalance(state, spec_reb):
                 continue
         for proposal in program(inst, weight, ctx):
             store.append_event(
@@ -192,10 +297,12 @@ def process_proposal(
     dry_run: bool,
     execute_wait: int,
     summary: dict[str, Any],
+    entry_prices: dict[str, float] | None = None,
 ) -> None:
     """compile -> gate -> execute/approval, all journaled. The only money path."""
     try:
         order = compile_proposal(proposal)
+        _annotate_equity_close(order, proposal, inst, entry_prices)
     except CompileError as e:
         summary["compile_failed"].append({"proposal_id": proposal.id, "reason": str(e)})
         store.append_event(
@@ -207,16 +314,35 @@ def process_proposal(
         )
         return
 
+    gate_and_execute(store, inst, proposal, order, snap, guardrails,
+                     market_open, dry_run, execute_wait, summary)
+
+
+def gate_and_execute(
+    store,
+    inst: StrategyInstance | None,
+    proposal: TradeProposal,
+    order: OrderPlan,
+    snap: GateSnapshot,
+    guardrails: Guardrails,
+    market_open: bool,
+    dry_run: bool,
+    execute_wait: int,
+    summary: dict[str, Any],
+    bucket: str = "executed",
+) -> None:
+    """gate -> execute/approval for a ready OrderPlan. Shared by strategy
+    proposals (bucket=executed) and the exit manager (bucket=exits)."""
     verdict = run_gate(order, proposal, snap, guardrails)
     store.append_event(_verdict_event(verdict, order))
 
     if verdict.verdict == "approved":
         if dry_run:
-            summary["executed"].append({"order_plan": order.model_dump(), "dry_run": True})
+            summary[bucket].append({"order_plan": order.model_dump(), "dry_run": True})
         else:
             result = execute_order_plan(order, market_open=market_open, wait_seconds=execute_wait)
-            summary["executed"].append(result)
-            if inst.family == "momentum_rotation":
+            summary[bucket].append(result)
+            if inst is not None and inst.family in ("momentum_rotation", "dsl_rotation"):
                 store.save("instance_state", inst.id,
                            {"last_rebalance": datetime.now(timezone.utc).isoformat()})
     elif verdict.verdict == "needs_human":
@@ -242,13 +368,59 @@ def process_proposal(
         summary["rejected"].append({"proposal_id": proposal.id, "codes": verdict.reason_codes})
 
 
+def collect_exits(store, ctx: EngineContext, guardrails: Guardrails) -> list[tuple[TradeProposal, OrderPlan]]:
+    """Exit manager pass: journal every exit proposal, return (proposal, order) pairs."""
+    pairs = plan_exits(ctx.positions, [o["symbol"] for o in ctx.open_orders], guardrails)
+    for proposal, _ in pairs:
+        store.append_event(
+            JournalEvent(
+                kind="proposal", human=proposal.thesis_human,
+                payload=proposal.model_dump(), refs={"proposal_id": proposal.id},
+            )
+        )
+    return pairs
+
+
+def _annotate_equity_close(
+    order: OrderPlan,
+    proposal: TradeProposal,
+    inst: StrategyInstance,
+    entry_prices: dict[str, float] | None,
+) -> None:
+    """Equity strategy exits (action=sell) carry their entry basis so the
+    executor books exact realized P&L on fill."""
+    if proposal.params.get("action") != "sell" or not entry_prices:
+        return
+    entry = entry_prices.get(proposal.underlying)
+    if not entry:
+        return
+    order.meta.update(
+        {
+            "closing": True,
+            "entry_price": float(entry),
+            "signed_qty": float(proposal.params.get("qty", 0)),
+            "pnl_multiplier": 1,
+            "family": inst.family,
+        }
+    )
+
+
+def equity_entry_prices(positions: list[dict[str, Any]]) -> dict[str, float]:
+    return {
+        p["symbol"]: float(p["avg_entry_price"])
+        for p in positions
+        if p["asset_class"] == "us_equity" and p.get("avg_entry_price")
+    }
+
+
 def new_summary(dry_run: bool, market_open: bool, mode: str) -> dict[str, Any]:
     return {
         "ts": datetime.now(timezone.utc).isoformat(),
         "dry_run": dry_run,
         "market_open": market_open,
         "mode": mode,
-        "proposals": [], "rejected": [], "executed": [], "needs_human": [], "compile_failed": [],
+        "proposals": [], "rejected": [], "executed": [], "needs_human": [],
+        "compile_failed": [], "exits": [],
     }
 
 
@@ -259,6 +431,7 @@ def journal_pass_summary(store, summary: dict[str, Any]) -> None:
             human=(
                 f"Loop pass done ({summary['mode']}, {'dry-run' if summary['dry_run'] else 'live paper'}): "
                 f"{len(summary['proposals'])} proposals, {len(summary['executed'])} executed, "
+                f"{len(summary.get('exits', []))} exits, "
                 f"{len(summary['needs_human'])} awaiting you, {len(summary['rejected'])} blocked."
             ),
             payload={k: v for k, v in summary.items() if k != "proposals"},
@@ -268,17 +441,36 @@ def journal_pass_summary(store, summary: dict[str, Any]) -> None:
 
 def run_once(dry_run: bool = False, execute_wait: int = 90) -> dict[str, Any]:
     """One deterministic pass (manual trigger / fallback path without ADK)."""
+    if not PASS_LOCK.acquire(blocking=False):
+        return {"skipped": "another pass is already running", "dry_run": dry_run}
+    try:
+        return _run_once_locked(dry_run, execute_wait)
+    finally:
+        PASS_LOCK.release()
+
+
+def _run_once_locked(dry_run: bool, execute_wait: int) -> dict[str, Any]:
     store = get_store()
     ctx, snap, clock = build_context_and_snapshot(store)
     guardrails = ctx.plan.guardrails if ctx.plan else DEFAULT_GUARDRAILS
 
     instances = load_instances_and_bars(store, ctx)
     summary = new_summary(dry_run, clock["is_open"], "plan" if ctx.plan else "dev-default")
+    weather = get_weather(store)  # cache hit - fetched during snapshot build
+    if weather:
+        summary["weather"] = {"score": weather.get("score"), "bucket": weather.get("bucket")}
 
+    # exits first: risk-reducing orders free capital before new entries
+    for proposal, order in collect_exits(store, ctx, guardrails):
+        gate_and_execute(store, None, proposal, order, snap, guardrails,
+                         clock["is_open"], dry_run, execute_wait, summary, bucket="exits")
+
+    entry_prices = equity_entry_prices(ctx.positions)
     for inst, proposal in collect_proposals(store, ctx, instances):
         summary["proposals"].append(proposal.id)
         process_proposal(store, inst, proposal, snap, guardrails,
-                         clock["is_open"], dry_run, execute_wait, summary)
+                         clock["is_open"], dry_run, execute_wait, summary,
+                         entry_prices=entry_prices)
 
     journal_pass_summary(store, summary)
     return summary
@@ -301,18 +493,52 @@ def _verdict_event(verdict: GateVerdict, order: OrderPlan) -> JournalEvent:
 
 # --------------------------------------------------------------------------- human approval path
 
+def expire_stale_approvals(store) -> list[str]:
+    """Timeout = automatic no. Makes the UI's promise real; runs every scheduler
+    minute regardless of autopilot state."""
+    now = datetime.now(timezone.utc)
+    expired: list[str] = []
+    for doc in store.list("approvals"):
+        if doc.get("status") != "pending":
+            continue
+        try:
+            created = datetime.fromisoformat(doc["created_at"])
+            hours = float(doc.get("expires_hours", 12))
+        except (KeyError, ValueError, TypeError):
+            continue
+        if (now - created).total_seconds() < hours * 3600:
+            continue
+        doc["status"] = "expired_timeout"
+        store.save("approvals", doc["id"], doc)
+        human = str((doc.get("order_plan") or {}).get("human", ""))
+        store.append_event(
+            JournalEvent(
+                kind="approval",
+                human=f"No answer in {hours:.0f}h - auto-rejected as promised: {human}",
+                payload=doc,
+                refs={"verdict_id": doc.get("id", "")},
+            )
+        )
+        expired.append(doc["id"])
+    return expired
+
+
 def decide_approval(approval_id: str, approve: bool, execute_wait: int = 90) -> dict[str, Any]:
     store = get_store()
-    doc = store.get("approvals", approval_id)
-    if not doc or doc.get("status") != "pending":
-        return {"ok": False, "error": "approval not found or already decided"}
+
+    # Atomic flip first: whoever wins this lock owns the decision. A double
+    # click or two concurrent requests can never execute the same order twice.
+    with APPROVAL_LOCK:
+        doc = store.get("approvals", approval_id)
+        if not doc or doc.get("status") != "pending":
+            return {"ok": False, "error": "approval not found or already decided"}
+        doc["status"] = "approved_by_human" if approve else "rejected_by_human"
+        store.save("approvals", approval_id, doc)
 
     order = OrderPlan.model_validate(doc["order_plan"])
     proposal = TradeProposal.model_validate(doc["proposal"])
 
     if not approve:
-        doc["status"] = "rejected_by_human"
-        store.save("approvals", approval_id, doc)
         store.append_event(
             JournalEvent(kind="approval", human=f"You said no - dropped: {order.human}",
                          payload=doc, refs={"proposal_id": proposal.id}))
@@ -328,9 +554,15 @@ def decide_approval(approval_id: str, approve: bool, execute_wait: int = 90) -> 
         store.append_event(_verdict_event(verdict, order))
         return {"ok": True, "decision": "rejected_on_recheck", "codes": verdict.reason_codes}
 
-    doc["status"] = "approved_by_human"
-    store.save("approvals", approval_id, doc)
-    result = execute_order_plan(order, market_open=clock["is_open"], wait_seconds=execute_wait)
+    try:
+        result = execute_order_plan(order, market_open=clock["is_open"], wait_seconds=execute_wait)
+    except Exception as e:
+        store.append_event(
+            JournalEvent(kind="system",
+                         human=f"You approved, but the order submit failed: {order.human} ({e})",
+                         payload={"approval": doc, "error": str(e)},
+                         refs={"proposal_id": proposal.id}))
+        return {"ok": False, "decision": "approved", "error": str(e)}
     store.append_event(
         JournalEvent(kind="approval", human=f"You approved - sent: {order.human}",
                      payload={"approval": doc, "result": result}, refs={"proposal_id": proposal.id}))

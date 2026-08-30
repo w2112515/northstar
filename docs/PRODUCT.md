@@ -16,9 +16,9 @@ Demo 口号：*Set the star. The fleet sails.*
 |---|---|---|
 | 平台/截止 | [Devpost](https://allthingsagentichackathon.devpost.com/)，**2026-08-31 17:00 PDT（北京时间 9/1 08:00）** | [lablab.ai](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)，**8/28–9/4**（P&L 窗口已开始） |
 | 硬性要求 | Gemini 3.5+（Gemini API 或 Vertex AI）；≥1 个 Google Agent 框架（我们选 **ADK Python 2.x**）；≥1 个 GCP 服务（我们选 **Cloud Run + Firestore**） | 专用比赛 paper 账户（起始 **$100k**，一邮箱一个）；**所有策略必须包含期权交易**；使用 Trading API + **MCP Server 或 CLI**；一页 write-up（AI 逻辑/风控闸门/Alpaca 基础设施） |
-| 评分 | **Demo & Readiness 占 30%**（视频+repo 证明真的能跑）等 | **P&L + 创意/传播**；lablab 通用项：演示、商业价值、技术应用、原创性 |
-| 赛道选择 | **The Taskmaster**（后台异步自治 agent，处理复杂工作流） | — |
-| 提交物 | 在线 demo、视频、公开/共享 repo、运行日志 | 在线原型、≤5 分钟视频、deck、公开 repo、write-up |
+| 评分（官方原文核对 8/30） | **40% Innovation & Operational Utility**（自治高价值行动）/ **30% Architectural Discipline**（解耦、状态、凭证、失败处理——"robust, not brittle scripts"）/ **30% Demo & Production Readiness**（live 未剪辑 demo、架构图、可复现、**Google Cloud 运行证据**） | **P&L + 创意/传播**；lablab 通用项：演示、商业价值、技术应用、原创性；总奖池 $6,000 |
+| 赛道选择 | 三选一：**The Taskmaster**（选定：后台异步自治 agent 处理复杂工作流）/ Collaborative Partner（引导式协作，不符）/ Fortified Enterprise Fleet（企业 Registry/Model Armor 栈，不符）。赛道奖 $20k×1；交叉奖：全场 $50k、个人/业余 $10k×2、最佳架构 $5k×2、最佳多模态 UX $5k×2 | 单赛道，无子类目 |
+| 提交物 | hosted URL（**强烈建议、非硬性**——判分时不必仍在线，视频/repo 里有部署证据即可）；**~4 分钟视频（必须入镜 Cloud Run 控制台或 `.run.app` URL）**；repo 公开或私有（私有需共享 testing@devpost.com + cloudhackathons@google.com）；README 复现步骤；**架构图**；bonus 分：公开博文/带 #AllThingsAgenticHackathon 的社媒帖、集成 Gemma/Veo/Lyria | 在线原型、≤5 分钟视频、deck、公开 repo、write-up |
 
 **一套代码，两个叙事**：Google 提交强调"自治舰队 + 进化循环 + 人在环审批"；Alpaca 提交强调"期权策略 + 风控闸门 + 真实 P&L 曲线"。
 

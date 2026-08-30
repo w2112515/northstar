@@ -5,11 +5,22 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 # apps/api/northstar/config.py -> repo root is parents[3]
 REPO_ROOT = Path(__file__).resolve().parents[3]
-load_dotenv(REPO_ROOT / ".env")
+_ENV_FILE = REPO_ROOT / ".env"
+# .env is the local source of truth; override any empty inherited env vars.
+load_dotenv(_ENV_FILE, override=True)
+_FILE_ENV = dotenv_values(_ENV_FILE)
+
+
+def _env(name: str, default: str = "") -> str:
+    """Prefer .env file over inherited process env (empty GOOGLE_API_KEY often leaks in)."""
+    file_val = _FILE_ENV.get(name)
+    if file_val is not None and str(file_val).strip() != "":
+        return str(file_val).strip()
+    return os.getenv(name, default).strip()
 
 
 @dataclass(frozen=True)
@@ -29,21 +40,27 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    paper = os.getenv("ALPACA_PAPER", "true").strip().lower() != "false"
-    key = os.getenv("ALPACA_API_KEY", "")
+    paper = _env("ALPACA_PAPER", "true").lower() != "false"
+    role = _env("ACCOUNT_ROLE", "dev")
+    # Both accounts can live in .env at once: ALPACA_API_KEY_<ROLE> wins over the
+    # default pair, so switching tracks = flip ACCOUNT_ROLE, restart. One line.
+    key = _env(f"ALPACA_API_KEY_{role.upper()}") or _env("ALPACA_API_KEY")
+    secret = _env(f"ALPACA_SECRET_KEY_{role.upper()}") or _env("ALPACA_SECRET_KEY")
     if not paper:
         # Hard safety boundary for the hackathon build: live trading is not implemented.
         raise RuntimeError("Live trading is disabled in this build (ALPACA_PAPER must be true).")
     if key and not key.startswith("PK"):
         raise RuntimeError("Refusing to start: ALPACA_API_KEY does not look like a paper key (PK...).")
-    data_dir = REPO_ROOT / "data"
-    data_dir.mkdir(exist_ok=True)
+    # Journal/state are account-specific (peak equity, cooldowns, approvals):
+    # each role gets its own directory so switching Alpaca keys never mixes books.
+    data_dir = REPO_ROOT / "data" / role
+    data_dir.mkdir(parents=True, exist_ok=True)
     return Settings(
         alpaca_api_key=key,
-        alpaca_secret_key=os.getenv("ALPACA_SECRET_KEY", ""),
+        alpaca_secret_key=secret,
         alpaca_paper=True,
-        account_role=os.getenv("ACCOUNT_ROLE", "dev"),
-        google_api_key=os.getenv("GOOGLE_API_KEY", "").strip(),
-        journal_store=os.getenv("JOURNAL_STORE", "local"),
+        account_role=role,
+        google_api_key=_env("GOOGLE_API_KEY"),
+        journal_store=_env("JOURNAL_STORE", "local"),
         data_dir=data_dir,
     )

@@ -21,11 +21,35 @@ async def _scheduler() -> None:
     no-op cheaply); triage + gates decide what actually happens.
     """
     from northstar.adkflows.trading_loop import run_trading_pass
+    from northstar.engine import expire_stale_approvals
+    from northstar.nightly import run_nightly
+
+    from northstar.fills import reconcile_order_fills
 
     store = get_store()
     while True:
         await asyncio.sleep(60)
         try:
+            # timeout = automatic no, independent of autopilot/kill switch
+            expire_stale_approvals(store)
+
+            # back-fill fills for orders that completed outside a live pass
+            # (weekend-queued orders filling at Monday's open); every 5 minutes
+            now = datetime.now(timezone.utc)
+            fr = store.get("state", "fills_reconcile") or {}
+            last_fr = fr.get("last_run")
+            if not last_fr or (now - datetime.fromisoformat(last_fr)).total_seconds() >= 300:
+                store.save("state", "fills_reconcile", {"last_run": now.isoformat()})
+                await asyncio.to_thread(reconcile_order_fills, store)
+
+            # night watch: once per UTC date, after 01:00 UTC (US market long closed)
+            now = datetime.now(timezone.utc)
+            nightly_state = store.get("state", "nightly") or {}
+            if now.hour >= 1 and nightly_state.get("last_run") != now.date().isoformat():
+                store.save("state", "nightly",
+                           {**nightly_state, "last_run": now.date().isoformat()})
+                await asyncio.to_thread(run_nightly, store)
+
             controls = store.get("state", "controls") or {}
             if not controls.get("autopilot") or controls.get("kill_switch"):
                 continue
@@ -35,7 +59,9 @@ async def _scheduler() -> None:
             if last and (now - datetime.fromisoformat(last)).total_seconds() < LOOP_MINUTES * 60:
                 continue
             store.save("state", "portfolio", {**portfolio, "last_tick": now.isoformat()})
-            await run_trading_pass(reason="scheduled")
+            # own loop in a worker thread - sync LLM/broker calls inside the
+            # nodes must not freeze the API while a pass runs
+            await asyncio.to_thread(asyncio.run, run_trading_pass(reason="scheduled"))
         except Exception as e:  # keep the scheduler alive; failures are journaled
             from northstar.domain import JournalEvent
 
@@ -44,10 +70,30 @@ async def _scheduler() -> None:
             )
 
 
+def _build_a2a_subapp():
+    """Weather station as an A2A agent; optional so a missing a2a extra never kills the API."""
+    try:
+        from northstar.adkflows.a2a_weather import build_a2a_app
+
+        return build_a2a_app()
+    except Exception as e:
+        print(f"[a2a] weather agent disabled: {type(e).__name__}: {e}")
+        return None
+
+
+_a2a_app = _build_a2a_subapp()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_scheduler())
-    yield
+    if _a2a_app is not None:
+        # Mounted sub-apps don't get their lifespan run by Starlette; the A2A app
+        # builds its agent card + routes in lifespan, so enter it explicitly.
+        async with _a2a_app.router.lifespan_context(_a2a_app):
+            yield
+    else:
+        yield
     task.cancel()
 
 
@@ -60,6 +106,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Optional write guard for public deployments: when NORTHSTAR_ADMIN_TOKEN is
+# set, every mutating request must carry it (the web app's server-side proxy
+# injects the header; browsers never see the token). GETs stay public so the
+# cockpit is viewable, and the A2A agent endpoint stays open by design - it
+# answers weather questions and mutates nothing. Unset (local dev) = no-op.
+ADMIN_TOKEN = os.getenv("NORTHSTAR_ADMIN_TOKEN", "")
+
+
+@app.middleware("http")
+async def _guard_mutations(request, call_next):
+    if (
+        ADMIN_TOKEN
+        and request.method not in ("GET", "HEAD", "OPTIONS")
+        and not request.url.path.startswith("/a2a")
+        and request.headers.get("x-northstar-key") != ADMIN_TOKEN
+    ):
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            {"error": "unauthorized - mutating endpoints require X-NorthStar-Key"},
+            status_code=401,
+        )
+    return await call_next(request)
+
 
 @app.get("/healthz")
 def healthz() -> dict:
@@ -69,7 +139,9 @@ def healthz() -> dict:
         "paper": s.alpaca_paper,
         "account_role": s.account_role,
         "llm_enabled": s.llm_enabled,
+        "llm_key_len": len(s.google_api_key),
         "journal_store": s.journal_store,
+        "rev": 2,
     }
 
 
@@ -112,3 +184,8 @@ def _include_optional_routers() -> None:
 
 
 _include_optional_routers()
+
+if _a2a_app is not None:
+    # Catch-all mount: FastAPI's own routes win; /a2a/weather/* (JSON-RPC) and the
+    # /a2a/weather/.well-known agent card fall through to the A2A sub-app.
+    app.mount("/", _a2a_app)

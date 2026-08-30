@@ -16,6 +16,12 @@ class EngineContext:
     bars: dict[str, pd.DataFrame] = field(default_factory=dict)
     plan: Plan | None = None
     goal: Goal | None = None
+    # scout radar: today's top candidates + union of recent reports (so names
+    # bought via scout stay sellable after they drop off the current Top-K)
+    scout_symbols: list[str] = field(default_factory=list)
+    scout_recent_pool: list[str] = field(default_factory=list)
+    # options watch: best premium-yield underlyings from the radar's option lens
+    options_watch: list[str] = field(default_factory=list)
 
     def equity(self) -> float:
         return float(self.account.get("equity", 0.0))
@@ -41,3 +47,41 @@ class EngineContext:
 
 class StrategyProgram(Protocol):
     def propose(self, instance: StrategyInstance, weight: float, ctx: EngineContext) -> list[TradeProposal]: ...
+
+
+def effective_universe(params: dict[str, Any], ctx: EngineContext) -> list[str]:
+    """A program's tradable universe for this pass.
+
+    Static params universe, plus (unless the instance opts out with
+    use_scout=false) today's scout candidates, plus any currently-held name
+    from the recent scout pool - a position entered via scout must remain in
+    the universe until it is exited, or rotation could never sell it.
+    """
+    universe = list(dict.fromkeys(params.get("universe", [])))
+    if not params.get("use_scout", True):
+        return universe
+    merged = dict.fromkeys(universe)
+    for sym in ctx.scout_symbols:
+        merged.setdefault(sym)
+    held = {
+        p["symbol"] for p in ctx.positions
+        if p["asset_class"] == "us_equity" and float(p["qty"]) > 0
+    }
+    for sym in ctx.scout_recent_pool:
+        if sym in held:
+            merged.setdefault(sym)
+    return list(merged)
+
+
+def effective_underlyings(params: dict[str, Any], ctx: EngineContext) -> list[str]:
+    """Options crews' underlyings: static list + the options-watch board
+    (opt-out via use_scout=false). Names already carrying one of our option
+    structures stay in regardless - the state machine must keep managing them.
+    """
+    base = list(dict.fromkeys(params.get("underlyings", [])))
+    if not params.get("use_scout", True):
+        return base
+    merged = dict.fromkeys(base)
+    for sym in ctx.options_watch:
+        merged.setdefault(sym)
+    return list(merged)

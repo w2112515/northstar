@@ -6,13 +6,17 @@ Per underlying:
   >=100 shares held         -> sell covered call
   1..99 shares              -> wait (odd lot; no naked calls, ever)
 
+The same program also serves the single-sided families: an instance with
+strategy_type "cash_secured_put" only sells puts (never calls after an
+assignment), "covered_call" only rents out shares the user already holds.
+
 The concrete contract is chosen by the options compiler, not here.
 """
 
 from __future__ import annotations
 
 from northstar.domain import StrategyInstance, TradeProposal
-from northstar.strategies.base import EngineContext
+from northstar.strategies.base import EngineContext, effective_underlyings
 
 
 def _occ_is_put(symbol: str) -> bool:
@@ -25,7 +29,10 @@ def _occ_is_call(symbol: str) -> bool:
 
 def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> list[TradeProposal]:
     p = instance.params
-    underlyings: list[str] = p.get("underlyings", [])
+    mode = instance.strategy_type          # wheel | cash_secured_put | covered_call
+    sell_puts = mode in ("wheel", "cash_secured_put")
+    sell_calls = mode in ("wheel", "covered_call")
+    underlyings = effective_underlyings(p, ctx)
     if not underlyings:
         return []
     per_name_budget = ctx.allocation_equity(weight) / len(underlyings)
@@ -36,7 +43,7 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
             continue
         # affordability: a delta-0.25 put's collateral is roughly price*0.90 x100
         df = ctx.bars.get(und)
-        if df is not None and len(df):
+        if sell_puts and df is not None and len(df):
             est_collateral = float(df["close"].iloc[-1]) * 0.90 * 100
             if est_collateral > per_name_budget:
                 continue  # honest skip: this name is too expensive for the budget
@@ -45,7 +52,7 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
         short_calls = [o for o in opts if _occ_is_call(o["symbol"]) and float(o["qty"]) < 0]
         shares = ctx.stock_qty(und)
 
-        if shares >= 100 and not short_calls:
+        if sell_calls and shares >= 100 and not short_calls:
             proposals.append(
                 TradeProposal(
                     source=f"strategy:{instance.id}",
@@ -66,7 +73,7 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
                     },
                 )
             )
-        elif shares < 100 and not short_puts:
+        elif sell_puts and shares < 100 and not short_puts:
             proposals.append(
                 TradeProposal(
                     source=f"strategy:{instance.id}",

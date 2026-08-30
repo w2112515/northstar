@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -17,7 +19,12 @@ class TickBody(BaseModel):
 async def tick(body: TickBody) -> dict:
     from northstar.adkflows.trading_loop import run_trading_pass
 
-    return await run_trading_pass(reason=body.reason, dry_run=body.dry_run)
+    # The pass runs on its own event loop in a worker thread: node bodies make
+    # sync LLM/broker calls, and running them here would freeze every other
+    # endpoint (cockpit refresh, live graph beacons) for the whole pass.
+    return await asyncio.to_thread(
+        asyncio.run, run_trading_pass(reason=body.reason, dry_run=body.dry_run)
+    )
 
 
 class AutopilotBody(BaseModel):

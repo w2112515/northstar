@@ -26,6 +26,7 @@ def utcnow() -> str:
 EventKind = Literal[
     "system", "event", "signal", "proposal", "verdict",
     "order", "fill", "pnl", "experiment", "digest", "approval",
+    "debate", "trace", "forecast", "scout",
 ]
 
 
@@ -65,6 +66,11 @@ class Guardrails(BaseModel):
     max_open_positions: int = 12
     cooldown_after_losses: int = 3         # consecutive losses -> 24h cooldown
     approval_timeout_hours: int = 12       # HITL timeout => reject
+    max_orders_per_day: int = 12           # rate limit: new orders per UTC day
+    max_order_notional_pct: float = 0.10   # single equity order <= this share of equity
+    weather_floor: int = 20                # market weather below this -> new risk needs approval
+    exit_profit_take_pct: float = 0.50     # close short premium once this share of credit is captured
+    exit_dte: int = 7                      # close option structures at/below this DTE (gamma/assignment)
 
 
 class PlanAllocation(BaseModel):
@@ -96,7 +102,8 @@ StrategyType = Literal[
     "iron_condor", "protective_put",
     "momentum_rotation", "ma_cross_trend", "rsi_mean_reversion",
     "bollinger_reversion", "sector_rotation", "defensive_6040",
-    "ai_analyst",
+    "dsl_rotation",
+    "ai_analyst", "manual_close",
 ]
 
 OPTION_STRATEGY_WHITELIST: set[str] = {
@@ -177,6 +184,7 @@ class StrategyInstance(BaseModel):
     status: Literal["candidate", "trial", "champion", "archived"] = "champion"
     enabled: bool = True
     lineage: Lineage = Field(default_factory=Lineage)
+    paper_trial: dict[str, Any] | None = None  # {"start", "days", "parent_instance_id"} while on trial
     created_at: str = Field(default_factory=utcnow)
 
 
@@ -190,6 +198,8 @@ class BacktestReport(BaseModel):
     trials_in_family: int = 1
     cost_model: str = "slippage_5bps"
     data_note: str = ""                    # honest data-boundary note
+    goal_fit: float | None = None          # P(hit user's goal) - risk-tier DD penalty
+    goal_fit_note: str = ""                # which goal/tier this was scored against
 
 
 class EvolutionExperiment(BaseModel):

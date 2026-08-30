@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from northstar.domain import StrategyInstance, TradeProposal
-from northstar.strategies.base import EngineContext
+from northstar.strategies.base import EngineContext, effective_universe
 
 
 def momentum_targets(
@@ -30,7 +30,7 @@ def momentum_targets(
 
 def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> list[TradeProposal]:
     p = instance.params
-    universe: list[str] = p.get("universe", [])
+    universe: list[str] = effective_universe(p, ctx)
     lookback = int(p.get("lookback_days", 90))
     top_n = int(p.get("top_n", 3))
 
@@ -64,7 +64,21 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
                 )
             )
 
-    # buys: in targets but not held (or underweight by >25%)
+    # Sleeve budget: capital already deployed across the universe counts
+    # against this rebalance's buys. Names rotating out this pass are excluded
+    # (their sale frees the budget); if those sells don't fill, the gate's
+    # sleeve_budget rule backstops against the live positions.
+    selling = {p.underlying for p in proposals}
+    sleeve_value = 0.0
+    for sym, qty in held.items():
+        if sym in selling or qty <= 0:
+            continue
+        df = ctx.bars.get(sym)
+        if df is not None and len(df):
+            sleeve_value += qty * float(df["close"].iloc[-1])
+    budget_left = max(alloc - sleeve_value, 0.0)
+
+    # buys: in targets but not held (or underweight by >25%), within budget
     for sym in targets:
         df = ctx.bars.get(sym)
         if df is None or ctx.has_open_order_for(sym):
@@ -73,7 +87,10 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
         target_qty = int(per_name // price)
         cur = held.get(sym, 0.0)
         if target_qty >= 1 and cur < target_qty * 0.75:
-            buy_qty = target_qty - int(cur)
+            buy_qty = min(target_qty - int(cur), int(budget_left // price))
+            if buy_qty < 1:
+                continue
+            budget_left -= buy_qty * price
             lookback_ret = float(df["close"].iloc[-1] / df["close"].iloc[-lookback] - 1.0)
             proposals.append(
                 TradeProposal(

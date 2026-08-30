@@ -11,7 +11,7 @@ def snap(**kw) -> GateSnapshot:
         equity=100_000.0, last_equity=100_000.0, peak_equity=100_000.0,
         market_open=True, kill_switch=False, consecutive_losses=0,
         open_positions_count=2, exposure_by_underlying={}, open_order_symbols=[],
-        stock_qty_by_symbol={},
+        stock_qty_by_symbol={}, orders_today=0, frozen_symbols=[], options_level=3,
     )
     base.update(kw)
     return GateSnapshot(**base)
@@ -94,24 +94,77 @@ def test_naked_call_forbidden():
     assert v_ok.verdict == "approved"
 
 
-def test_spread_max_loss_cap():
-    order = OrderPlan(
+def spread_order(est_max_loss=1_800.0) -> OrderPlan:
+    return OrderPlan(
         proposal_id="tp_x", strategy_type="bull_put_spread",
         legs=[
             OrderLeg(symbol="SPY260918P00760000", side="sell", qty=1, asset_class="us_option", limit_price=5.0),
             OrderLeg(symbol="SPY260918P00740000", side="buy", qty=1, asset_class="us_option", limit_price=3.0),
         ],
-        est_max_loss=1_800.0,  # width 2000 - credit 200
-        meta={"spread_pct": 0.05, "bid": 5.0},
+        est_max_loss=est_max_loss,  # width 2000 - credit 200
+        meta={"spread_pct": 0.05, "bid": 5.0, "order_class": "mleg", "net_limit": -2.0},
     )
-    prop = TradeProposal(source="s", underlying="SPY", direction="bullish",
+
+
+def spread_proposal() -> TradeProposal:
+    return TradeProposal(source="s", underlying="SPY", direction="bullish",
                          strategy_type="bull_put_spread")
-    v = run_gate(order, prop, snap(), G)  # cap = 1% * 100k = 1000 < 1800
+
+
+def test_spread_max_loss_cap():
+    v = run_gate(spread_order(), spread_proposal(), snap(), G)  # cap = 1% * 100k = 1000 < 1800
     assert v.verdict == "rejected"
     assert "MAX_LOSS_EXCEEDED" in v.reason_codes
 
-    v_ok = run_gate(order, prop, snap(equity=200_000.0, last_equity=200_000.0, peak_equity=200_000.0), G)
+    v_ok = run_gate(spread_order(), spread_proposal(),
+                    snap(equity=200_000.0, last_equity=200_000.0, peak_equity=200_000.0), G)
     assert v_ok.verdict == "approved"
+
+
+def test_spread_needs_options_level_3():
+    v = run_gate(spread_order(est_max_loss=900.0), spread_proposal(), snap(options_level=2), G)
+    assert v.verdict == "rejected"
+    assert "OPTIONS_LEVEL_TOO_LOW" in v.reason_codes
+
+    # single-leg CSP is fine at level 2
+    v_csp = run_gate(csp_order(), csp_proposal(), snap(options_level=2), G)
+    assert v_csp.verdict == "approved"
+
+
+def test_spread_max_loss_counts_toward_concentration():
+    # existing SPY exposure 19.5k + spread max loss 900 > 20% cap of 100k
+    v = run_gate(spread_order(est_max_loss=900.0), spread_proposal(),
+                 snap(exposure_by_underlying={"SPY": 19_500.0}), G)
+    assert v.verdict == "rejected"
+    assert "CONCENTRATION_EXCEEDED" in v.reason_codes
+
+
+def test_frozen_symbol_rejected():
+    v = run_gate(csp_order(), csp_proposal(), snap(frozen_symbols=["amd"]), G)
+    assert v.verdict == "rejected"
+    assert "SYMBOL_FROZEN" in v.reason_codes
+
+
+def test_order_rate_limit():
+    v = run_gate(csp_order(), csp_proposal(), snap(orders_today=12), G)
+    assert v.verdict == "rejected"
+    assert "ORDER_RATE_LIMIT" in v.reason_codes
+
+    v_ok = run_gate(csp_order(), csp_proposal(), snap(orders_today=11), G)
+    assert v_ok.verdict == "approved"
+
+
+def test_equity_order_notional_cap():
+    order = OrderPlan(
+        proposal_id="tp_x", strategy_type="rsi_mean_reversion",
+        legs=[OrderLeg(symbol="NVDA", side="buy", qty=80, asset_class="us_equity", limit_price=180.0)],
+        est_max_loss=14_400.0, meta={"notional": 14_400.0},
+    )
+    prop = TradeProposal(source="s", underlying="NVDA", direction="bullish",
+                         strategy_type="rsi_mean_reversion")
+    v = run_gate(order, prop, snap(), G)  # 14.4k > 10% * 100k
+    assert v.verdict == "rejected"
+    assert "ORDER_NOTIONAL_EXCEEDED" in v.reason_codes
 
 
 def test_concentration_cap():
@@ -159,4 +212,151 @@ def test_max_open_positions():
 
 def test_closed_market_still_approved_queues():
     v = run_gate(csp_order(), csp_proposal(), snap(market_open=False), G)
+    assert v.verdict == "approved"
+
+
+def test_weather_storm_pauses_new_risk():
+    v = run_gate(csp_order(), csp_proposal(), snap(weather_score=15), G)  # floor 20
+    assert v.verdict == "needs_human"
+    assert "WEATHER_STORM" in v.reason_codes
+
+
+def test_weather_never_blocks_exits():
+    order = OrderPlan(
+        proposal_id="tp_x", strategy_type="momentum_rotation",
+        legs=[OrderLeg(symbol="NVDA", side="sell", qty=10, asset_class="us_equity", limit_price=180.0)],
+        est_max_loss=0.0, meta={},
+    )
+    prop = TradeProposal(source="s", underlying="NVDA", direction="bearish",
+                         strategy_type="momentum_rotation")
+    v = run_gate(order, prop, snap(weather_score=5), G)
+    assert v.verdict == "approved"
+
+
+def test_weather_offline_never_blocks():
+    v = run_gate(csp_order(), csp_proposal(), snap(weather_score=None), G)
+    assert v.verdict == "approved"
+
+
+def test_weather_above_floor_passes():
+    v = run_gate(csp_order(), csp_proposal(), snap(weather_score=21), G)
+    assert v.verdict == "approved"
+    weather_checks = [c for c in v.checks if c.rule == "weather_floor"]
+    assert len(weather_checks) == 1 and weather_checks[0].passed
+
+
+# ------------------------------------------------------------------ closing orders
+
+def close_order(symbol="AMD260918P00170000") -> OrderPlan:
+    return OrderPlan(
+        proposal_id="tp_x", strategy_type="cash_secured_put",
+        legs=[OrderLeg(symbol=symbol, side="buy", qty=1,
+                       asset_class="us_option", limit_price=0.55)],
+        est_max_loss=0.0,
+        meta={"closing": True, "entry_price": 2.5, "signed_qty": -1, "pnl_multiplier": 100},
+    )
+
+
+def test_closing_order_ignores_new_risk_rules():
+    # storm weather + rate limit + frozen + breaker + cooldown + max positions:
+    # every new-risk stop is active, the close still goes through
+    s = snap(
+        weather_score=5, orders_today=12, frozen_symbols=["AMD"],
+        equity=91_000.0, last_equity=91_450.0,  # soft breaker zone
+        consecutive_losses=5, open_positions_count=12, options_level=2,
+        exposure_by_underlying={"AMD": 50_000.0},
+    )
+    v = run_gate(close_order(), csp_proposal(), s, G)
+    assert v.verdict == "approved"
+    assert any(c.rule == "closing_order" for c in v.checks)
+
+
+def test_closing_order_still_respects_kill_switch():
+    v = run_gate(close_order(), csp_proposal(), snap(kill_switch=True), G)
+    assert v.verdict == "rejected"
+    assert "KILL_SWITCH" in v.reason_codes
+
+
+def test_closing_duplicate_exact_symbol_only():
+    # same OCC symbol pending -> duplicate; other option on same underlying -> fine
+    v_dup = run_gate(close_order(), csp_proposal(),
+                     snap(open_order_symbols=["AMD260918P00170000"]), G)
+    assert v_dup.verdict == "rejected"
+    assert "DUPLICATE" in v_dup.reason_codes
+
+    v_ok = run_gate(close_order(), csp_proposal(),
+                    snap(open_order_symbols=["AMD260911P00165000"]), G)
+    assert v_ok.verdict == "approved"
+
+
+def test_closing_mleg_still_needs_options_level():
+    order = OrderPlan(
+        proposal_id="tp_x", strategy_type="bull_put_spread",
+        legs=[
+            OrderLeg(symbol="SPY260918P00760000", side="buy", qty=1, asset_class="us_option"),
+            OrderLeg(symbol="SPY260918P00740000", side="sell", qty=1, asset_class="us_option"),
+        ],
+        est_max_loss=0.0,
+        meta={"closing": True, "order_class": "mleg", "net_limit": 0.85, "contracts": 1},
+    )
+    v = run_gate(order, spread_proposal(), snap(options_level=2), G)
+    assert v.verdict == "rejected"
+    assert "OPTIONS_LEVEL_TOO_LOW" in v.reason_codes
+
+
+# ------------------------------------------------------------------ sleeve budget
+
+def momentum_buy(qty=10, price=100.0) -> tuple[OrderPlan, TradeProposal]:
+    order = OrderPlan(
+        proposal_id="tp_x", strategy_type="momentum_rotation",
+        legs=[OrderLeg(symbol="NVDA", side="buy", qty=qty, asset_class="us_equity", limit_price=price)],
+        est_max_loss=qty * price, meta={},
+    )
+    prop = TradeProposal(source="s", underlying="NVDA", direction="bullish",
+                         strategy_type="momentum_rotation")
+    return order, prop
+
+
+def test_sleeve_budget_blocks_overweight_family():
+    # sleeve already at $32.5k of a $33k budget; a $1k buy would breach it
+    order, prop = momentum_buy(qty=10, price=100.0)
+    v = run_gate(order, prop, snap(
+        sleeve_budget_by_family={"momentum_rotation": 33_000.0},
+        sleeve_exposure_by_family={"momentum_rotation": 32_500.0},
+    ), G)
+    assert v.verdict == "rejected"
+    assert "SLEEVE_BUDGET_EXCEEDED" in v.reason_codes
+
+
+def test_sleeve_budget_within_cap_approved():
+    order, prop = momentum_buy(qty=10, price=100.0)
+    v = run_gate(order, prop, snap(
+        sleeve_budget_by_family={"momentum_rotation": 33_000.0},
+        sleeve_exposure_by_family={"momentum_rotation": 30_000.0},
+    ), G)
+    assert v.verdict == "approved"
+    sleeve_checks = [c for c in v.checks if c.rule == "sleeve_budget"]
+    assert len(sleeve_checks) == 1 and sleeve_checks[0].passed
+
+
+def test_sleeve_budget_ignores_families_without_budget():
+    # no budget entry for this family (e.g. options sleeves) -> rule stays silent
+    order, prop = momentum_buy(qty=10, price=100.0)
+    v = run_gate(order, prop, snap(), G)
+    assert v.verdict == "approved"
+    assert not any(c.rule == "sleeve_budget" for c in v.checks)
+
+
+def test_sleeve_budget_never_blocks_sells():
+    order = OrderPlan(
+        proposal_id="tp_x", strategy_type="momentum_rotation",
+        legs=[OrderLeg(symbol="NVDA", side="sell", qty=10, asset_class="us_equity", limit_price=100.0)],
+        est_max_loss=0.0, meta={},
+    )
+    prop = TradeProposal(source="s", underlying="NVDA", direction="bearish",
+                         strategy_type="momentum_rotation")
+    v = run_gate(order, prop, snap(
+        sleeve_budget_by_family={"momentum_rotation": 33_000.0},
+        sleeve_exposure_by_family={"momentum_rotation": 49_000.0},  # already overweight
+    ), G)
     assert v.verdict == "approved"

@@ -141,7 +141,7 @@ flowchart TB
 hks30/
 ├─ apps/
 │  ├─ web/               # Next.js 16 前端（Night Voyage UI）+ Dockerfile
-│  │  └─ src/app/        # / 驾驶舱、/onboarding、/strategies、/lab、/journal
+│  │  └─ src/app/        # / 驾驶舱、/onboarding、/research 工作台、/strategies、/journal（/lab → 重定向）
 │  └─ api/               # Python 3.12 (uv) + Dockerfile
 │     ├─ northstar/
 │     │  ├─ domain.py    # 全部领域契约（pydantic）

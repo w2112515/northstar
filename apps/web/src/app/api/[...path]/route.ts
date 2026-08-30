@@ -6,9 +6,17 @@ const base = () => process.env.API_BASE ?? "http://localhost:8800";
 
 async function proxy(req: NextRequest, path: string[]) {
   const url = `${base()}/api/${path.join("/")}${req.nextUrl.search}`;
+  const headers: Record<string, string> = {
+    "Content-Type": req.headers.get("Content-Type") ?? "application/json",
+  };
+  // Server-side write guard: the API rejects mutations without this token when
+  // deployed publicly. It only ever lives in server env - browsers never see it.
+  if (process.env.NORTHSTAR_ADMIN_TOKEN) {
+    headers["X-NorthStar-Key"] = process.env.NORTHSTAR_ADMIN_TOKEN;
+  }
   const init: RequestInit = {
     method: req.method,
-    headers: { "Content-Type": req.headers.get("Content-Type") ?? "application/json" },
+    headers,
     cache: "no-store",
   };
   if (req.method !== "GET" && req.method !== "HEAD") {
