@@ -1,6 +1,6 @@
 # NorthStar — 前端设计与视觉概念
 
-> 状态：v4.3，2026-09-01（v4 = **视觉权威 = Grok 原型**（`THhdE8o3NRn9RAPU-grok-workspace`，深色 Night Voyage 高工艺执行版），逐页以其截图为准做忠实实现；数据全部接真实后端。v3 的 EVIDENCE 浅色账本已退役，git 历史留档。**v4.1 = 对抗审计收敛轮**。**v4.3 = Overview 中栏收墨**：净值 + 概率 + 锥合成一张 Plan vs reality 卡，Y 轴贴着当前净值与近端锥，不对调 Market）。
+> 状态：v4.4，2026-09-01（v4 = **视觉权威 = Grok 原型**。**v4.4 = 左栏空槽收口**：Brief + Book + 固定高度 Market rail；三栏 `items-start`，禁止用视口高度把 K 线拉成长条。Positions 坐在锥下方。仍不对调 Market 与 Plan vs reality）。
 > 本文件是交互结构与视觉方向的唯一 owner。审计见 `docs/FRONTEND_AUDIT.md`。
 > 平台决定：**Web 桌面优先**，1280px 主设计，平板/手机降级可用不精修。界面语言：**英文**。
 
@@ -12,7 +12,7 @@
 
 顶栏（sticky）：金色星标 + wordmark + 四项文本导航（活跃项金色下刻度）+ 日期·NY 时钟 + LIVE/Closed + PAPER；**KPI 条**（hairline 分隔：EQUITY · DAY P/L · BUYING POWER · POSITIONS · wx · REGIME）；Overview 页挂 Controls 条（autopilot/run one pass/kill）。导航：**Overview** `/` · **Research** `/research` · **Strategies** `/strategies` · **Journal** `/journal`。向导 `/onboarding` 为无 chrome 的分屏星房间（左步骤轨 + 右内容 + 轨道图）。旧路由（/activity /proof /system /start /lab）全部 307 跳转。
 
-- **Overview**：三栏构图——左：Today's brief（编号条目：最强信号/待决/气象）+ Strategy book（running/trial/paused 计数）；中：一张 Plan vs reality 卡（hero-num 净值 + 概率行 + 金色进度尺压在收紧 Y 轴的蒙特卡洛锥上；真实净值金线 + ProbStrip；pass/kill 时在数字下插入紧凑 GoalOrbit，不再上下拆成空旷大数字卡 + 未缩放 12 个月锥）；右：Needs you（琥珀环面板）+ Agent pipeline（节点步进列表）+ Live feed（单列）。底部：Market + Positions 双栏（Market 列更宽）。Market 是只读终端，不与 Plan vs reality 对调——目标航迹是产品身份，K 线是证据窗。Market 照 TradingView 惯例（v4.2）：左大图（最低 22rem）+ 右 watchlist；滚轮缩放、拖拽平移、双击复位；图内十字线联动 OHLCV+MA20/50 图例、末价虚线+轴标签、1M/3M/6M/1Y 区间切换（单次取数只换可视区间）、watchlist 带 Last/Chg% 列（`/api/market/quotes` 批量报价，10 分钟缓存）、图表 locale 锁 en-US；MA 用 chart-only 色（signal/violet），不进 UI token。
+- **Overview**：三栏构图，`items-start`（栏高跟内容，不互拉）。左栏 rail：Today's brief + Strategy book + Market（窄栏上下叠：K 线固定 `h-64`，watchlist `max-h-52` 滚动；禁止把图做成视口高的竖条）；中：一张 Plan vs reality 卡（hero-num 净值 + 概率行 + 金色进度尺压在收紧 Y 轴的蒙特卡洛锥上；真实净值金线 + ProbStrip；pass/kill 时在数字下插入紧凑 GoalOrbit）+ 其下 Positions；右：Needs you + Agent pipeline + Live feed。Market 是只读终端，不与 Plan vs reality 对调——目标航迹是产品身份，K 线是证据窗。宽栏终端惯例（v4.2）仍用于无目标时的底栏：左大图 + 右 watchlist；rail 变体只改容器，不改数据与交互（滚轮缩放、拖拽平移、双击复位、十字线、1M/3M/6M/1Y、Last/Chg%、locale 锁 en-US）。
 - **Research**：四 tab——Radar（scout 候选 + options watch + daily brief）/ Compass（regime + AI 假设 + 家族统计 + plan advice 决策 + TimesFM 扇形 + 记分卡）/ Evolution（晋级候选 + 气象验证 + DSL specs + 实验血缘）/ Mining（因子 IC + 挖掘审批 + library）。
 - **Strategies**：目录卡网格（Enable/Pause）+ 运行实例表。
 - **Journal**：搜索 + kind 筛选 + 按日分组（Today/Yesterday sticky 头）+ 展开 raw JSON + load older。

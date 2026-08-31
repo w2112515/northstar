@@ -1,9 +1,9 @@
 "use client";
 
-/** Overview (cockpit): three columns - left brief + book; center one
- *  Plan-vs-reality card (equity + odds on a Y-tight cone; compact orbit
- *  only while a pass runs or kill is on); right needs-you + pipeline +
- *  feed. Market and Positions close the page. Shared SWR layer. */
+/** Overview (cockpit): left rail (brief + book + Market filling the
+ *  leftover shaft); center Plan-vs-reality; right needs-you + pipeline +
+ *  feed. Positions sits under the cone. Market is not swapped with the
+ *  destination card. Shared SWR layer. */
 
 import Link from "next/link";
 import { useMemo } from "react";
@@ -372,8 +372,7 @@ export default function Overview() {
       )}
 
       {goal && (
-        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
-          {/* left: brief + book */}
+        <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(17rem,0.95fr)_minmax(0,1.4fr)_minmax(16rem,0.95fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             <TodaysBrief
               brief={brief}
@@ -383,20 +382,31 @@ export default function Overview() {
               regimeLabel={regime?.label ?? null}
             />
             <StrategyBook instances={instances} />
+            <Panel className="flex min-w-0 flex-col overflow-hidden p-4">
+              <MarketPanel
+                variant="rail"
+                symbols={chartSymbols}
+                groups={watchGroups}
+                forecastDoc={forecastDoc}
+              />
+            </Panel>
           </div>
 
-          {/* center: one plan-vs-reality card */}
           <div className="flex min-w-0 flex-col gap-3">
             <PlanHero state={state} bands={bands} equityCurve={equityCurve} orbitState={orbitState} />
+            <PositionsPanel
+              positions={positions}
+              openOrders={openOrders}
+              marketOpen={state.clock.is_open}
+              risk={risk}
+            />
           </div>
 
-          {/* right: needs you + pipeline + feed */}
           <div className="flex min-w-0 flex-col gap-3">
             <Approvals approvals={approvals} killSwitch={state.kill_switch} />
             <Panel className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="kicker">Agent pipeline</span>
-                {/* running = teal; gold would make routine work a celebration */}
                 {passRunning && <Badge tone="teal">pass running</Badge>}
               </div>
               <Pipeline
@@ -421,17 +431,19 @@ export default function Overview() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]">
-        <Panel className="p-4">
-          <MarketPanel symbols={chartSymbols} groups={watchGroups} forecastDoc={forecastDoc} />
-        </Panel>
-        <PositionsPanel
-          positions={positions}
-          openOrders={openOrders}
-          marketOpen={state.clock.is_open}
-          risk={risk}
-        />
-      </div>
+      {!goal && (
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]">
+          <Panel className="p-4">
+            <MarketPanel symbols={chartSymbols} groups={watchGroups} forecastDoc={forecastDoc} />
+          </Panel>
+          <PositionsPanel
+            positions={positions}
+            openOrders={openOrders}
+            marketOpen={state.clock.is_open}
+            risk={risk}
+          />
+        </div>
+      )}
     </div>
   );
 }

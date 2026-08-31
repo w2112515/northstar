@@ -285,8 +285,11 @@ export function MarketPanel({
   symbols,
   groups,
   forecastDoc,
+  variant = "terminal",
 }: {
   symbols: string[];
+  /** rail = stacked chart + list for a tall narrow column */
+  variant?: "terminal" | "rail";
   /** Rail grouping (Holdings / Scout / Core). Must cover `symbols`. */
   groups?: WatchGroup[];
   forecastDoc: ForecastDoc | null;
@@ -427,9 +430,11 @@ export function MarketPanel({
 
   if (symbols.length === 0) return null;
 
+  const rail = variant === "rail";
+
   return (
-    <div className="flex h-full min-h-[28rem] flex-col">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className={`flex min-h-0 flex-col ${rail ? "" : "min-h-[28rem]"}`}>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="kicker">Market</span>
         <span className="text-sm font-medium text-ink">{active}</span>
         {lastBar && (
@@ -487,9 +492,15 @@ export function MarketPanel({
       )}
       {pinMsg && <p className="mt-1 text-right font-mono text-micro text-coral">{pinMsg}</p>}
 
-      <div className="mt-2 grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_11rem]">
-        <div className="min-w-0">
-          <div className={`relative h-[22rem] ${!inSync ? "opacity-60" : ""}`}>
+      <div
+        className={`mt-2 grid min-h-0 gap-3 ${
+          rail ? "grid-cols-1" : "flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_11rem]"
+        }`}
+      >
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div
+            className={`relative ${rail ? "h-64" : "h-[22rem]"} ${!inSync ? "opacity-60" : ""}`}
+          >
             {legendBar && !err && (
               <div
                 aria-hidden
@@ -571,7 +582,11 @@ export function MarketPanel({
           </div>
         </div>
 
-        <div className="max-h-56 space-y-0.5 overflow-y-auto md:max-h-[22rem]">
+        <div
+          className={`space-y-0.5 overflow-y-auto ${
+            rail ? "max-h-52" : "max-h-56 md:max-h-[22rem]"
+          }`}
+        >
           {railGroups.map((g) => (
             <div key={g.label || "all"}>
               {g.label && (

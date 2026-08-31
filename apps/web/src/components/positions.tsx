@@ -63,7 +63,7 @@ export function PositionsPanel({
   } as const;
 
   return (
-    <section className="panel flex h-full min-h-72 min-w-0 flex-col overflow-hidden p-4">
+    <section className="panel flex min-w-0 flex-col overflow-hidden p-4">
       <div className="flex items-center justify-between">
         <span className="kicker">Positions</span>
         <span className="num text-2xs text-mist">{positions.length} names</span>
