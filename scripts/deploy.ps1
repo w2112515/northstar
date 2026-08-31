@@ -80,6 +80,15 @@ Write-Host ">> Building Web image..." -ForegroundColor Cyan
 gcloud builds submit --project $ProjectId --tag "$repo/northstar-web:latest" "$root\apps\web"
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
+# :latest in the service spec does not create a revision when the YAML is
+# otherwise unchanged, so Cloud Run keeps serving the previous digest.
+$apiImage = gcloud artifacts docker images describe "$repo/northstar-api:latest" --project $ProjectId --format "value(image_summary.fully_qualified_digest)"
+$webImage = gcloud artifacts docker images describe "$repo/northstar-web:latest" --project $ProjectId --format "value(image_summary.fully_qualified_digest)"
+if (-not $apiImage -or -not $webImage) { Write-Error "Could not resolve image digests"; exit 1 }
+$gitSha = (git -C $root rev-parse --short HEAD)
+Write-Host ">> Pinning web=$webImage"
+Write-Host ">> Pinning api=$apiImage"
+
 # minScale/maxScale 1: the scheduler + pass lock are single-process by design;
 # a second instance would double-run the autopilot, zero would freeze it.
 # cpu-throttling false: the scheduler is an in-process background task; default
@@ -104,11 +113,12 @@ spec:
         autoscaling.knative.dev/maxScale: "1"
         run.googleapis.com/cpu-throttling: "false"
         run.googleapis.com/container-dependencies: '{"web":["api"]}'
+        northstar.dev/git: "$gitSha"
     spec:
       timeoutSeconds: 900
       containers:
       - name: web
-        image: $repo/northstar-web:latest
+        image: $webImage
         ports:
         - containerPort: 8080
         env:
@@ -124,7 +134,7 @@ spec:
             cpu: "1"
             memory: 512Mi
       - name: api
-        image: $repo/northstar-api:latest
+        image: $apiImage
         command: ["sh"]
         args: ["-c", "uv run uvicorn northstar.api.app:app --host 0.0.0.0 --port 8000"]
         env:
