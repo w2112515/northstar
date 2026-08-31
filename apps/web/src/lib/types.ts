@@ -21,6 +21,7 @@ export type EngineState = {
     guardrails: Record<string, number>;
     status: string;
     created_at?: string;
+    allocations?: { strategy_id: string; weight: number; why: string }[];
   } | null;
   goal: {
     capital_base: number;
@@ -122,7 +123,8 @@ export type FamilyBucketStats = {
   ann_return?: number | null;
   win_rate?: number | null;
   n_days?: number;
-  refused?: string;
+  days?: number;
+  refused?: string | boolean;
 };
 
 export type CompassDoc = {
@@ -222,6 +224,8 @@ export type PassProgress = {
   ts: string;
 };
 
+export type EvidenceKind = "walk_forward" | "vol_approx" | "rules_only" | "llm" | "none";
+
 export type CatalogEntry = {
   family: string;
   name: string;
@@ -229,6 +233,7 @@ export type CatalogEntry = {
   asset: string;
   risk: string;
   runnable: boolean;
+  evidence?: EvidenceKind;
 };
 
 export type Instance = {

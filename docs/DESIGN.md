@@ -14,7 +14,7 @@
 
 - **Overview**：三栏构图，`items-start`（栏高跟内容，不互拉）。左栏 rail：Today's brief + Strategy book + Market（窄栏上下叠：K 线固定 `h-64`，watchlist `max-h-52` 滚动；禁止把图做成视口高的竖条）；中：一张 Plan vs reality 卡（hero-num 净值 + 概率行 + 金色进度尺压在收紧 Y 轴的蒙特卡洛锥上；真实净值金线 + ProbStrip；pass/kill 时在数字下插入紧凑 GoalOrbit）+ 其下 Positions；右：Needs you + Agent pipeline + Live feed。Market 是只读终端，不与 Plan vs reality 对调——目标航迹是产品身份，K 线是证据窗。宽栏终端惯例（v4.2）仍用于无目标时的底栏：左大图 + 右 watchlist；rail 变体只改容器，不改数据与交互（滚轮缩放、拖拽平移、双击复位、十字线、1M/3M/6M/1Y、Last/Chg%、locale 锁 en-US）。
 - **Research**：四 tab——Radar（scout 候选 + options watch + daily brief）/ Compass（regime + AI 假设 + 家族统计 + plan advice 决策 + TimesFM 扇形 + 记分卡）/ Evolution（晋级候选 + 气象验证 + DSL specs + 实验血缘）/ Mining（因子 IC + 挖掘审批 + library）。
-- **Strategies**：目录卡网格（Enable/Pause）+ 运行实例表。
+- **Strategies**：分组目录（In the plan / Available / Soon）+ 计划内与 champion 卡的证据条（袖套权重、今日体制数字若 Compass 有桶、证据等级）+ 运行实例表。非计划卡保持定性；不按策略拆仓、不给期权贴 Sharpe。
 - **Journal**：搜索 + kind 筛选 + 按日分组（Today/Yesterday sticky 头）+ 展开 raw JSON + load older。
 - **Onboarding**：四步（Destination / Temperament / Honest plan / Confirm），红路径诚实替代方案，真实 preview/commit。
 

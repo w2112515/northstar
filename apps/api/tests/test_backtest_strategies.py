@@ -75,6 +75,19 @@ def test_every_runnable_family_has_a_program():
             assert entry["family"] in PROGRAMS, f"{entry['family']} is runnable but has no program"
 
 
+def test_catalog_evidence_is_honest():
+    """Runnable cards must declare how they are scored; soon cards stay none."""
+    from northstar.strategies import CATALOG, EVIDENCE_KINDS
+
+    for entry in CATALOG:
+        kind = entry.get("evidence")
+        assert kind in EVIDENCE_KINDS, f"{entry['family']} missing evidence class"
+        if entry["runnable"]:
+            assert kind != "none", f"{entry['family']} is runnable but evidence=none"
+        else:
+            assert kind == "none", f"{entry['family']} is soon but evidence={kind}"
+
+
 def test_evolvable_families_have_param_spaces_and_defaults():
     from northstar.evolution.loop import PARAM_SPACES
     from northstar.strategies import catalog_entry
