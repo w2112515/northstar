@@ -1,8 +1,8 @@
 "use client";
 
 /** Strategies: grouped switchboard (in the plan / available / soon) plus
- *  live instances. In-plan and champion cards carry sleeve, weather, and
- *  evidence class - never an invented options Sharpe. */
+ *  live instances. In-plan and earned-champion cards carry sleeve, weather,
+ *  and evidence class - never an invented options Sharpe. */
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -49,6 +49,14 @@ const EVIDENCE_BY_FAMILY: Record<string, EvidenceKind> = {
 
 function evidenceKind(entry: CatalogEntry): EvidenceKind {
   return entry.evidence ?? EVIDENCE_BY_FAMILY[entry.family] ?? "none";
+}
+
+/** Backend "champion" = incumbent. Gold is only for a version that beat one. */
+function earnedChampion(i: Instance): boolean {
+  if (i.status !== "champion") return false;
+  const parent = i.lineage?.parent_version?.trim();
+  const exp = i.lineage?.experiment_id?.trim();
+  return Boolean(parent || exp);
 }
 
 function bucketDays(stats: FamilyBucketStats): number | undefined {
@@ -202,7 +210,7 @@ export default function Strategies() {
     if (i.status !== "archived") {
       activeByFamily.set(i.family, (activeByFamily.get(i.family) ?? false) || i.enabled);
     }
-    if (i.status === "champion") {
+    if (earnedChampion(i)) {
       championByFamily.set(i.family, true);
       const hyp = i.lineage?.hypothesis?.trim();
       if (hyp) hypothesisByFamily.set(i.family, hyp);
@@ -347,10 +355,10 @@ export default function Strategies() {
                   <td className="py-2 pr-3">
                     <Badge
                       tone={
-                        i.status === "champion" ? "gold" : i.status === "trial" ? "amber" : "mist"
+                        earnedChampion(i) ? "gold" : i.status === "trial" ? "amber" : "mist"
                       }
                     >
-                      {i.status}
+                      {earnedChampion(i) ? "champion" : i.status === "champion" ? "live" : i.status}
                     </Badge>
                   </td>
                   <td className="py-2 pr-3">

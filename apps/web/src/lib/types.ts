@@ -243,7 +243,11 @@ export type Instance = {
   status: string;
   enabled: boolean;
   params: Record<string, unknown>;
-  lineage: { parent_version: string | null; hypothesis: string };
+  lineage: {
+    parent_version: string | null;
+    hypothesis: string;
+    experiment_id?: string | null;
+  };
 };
 
 export type BacktestReport = {
