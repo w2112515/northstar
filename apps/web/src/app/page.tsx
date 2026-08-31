@@ -1,17 +1,16 @@
 "use client";
 
-/** Overview (cockpit), APEX-iteration composition: three columns -
- *  left: Today's brief + Strategy book; center: big-number hero (orbit
- *  variant while a pass runs or the kill switch is on) + Plan-vs-reality
- *  cone; right: Needs you + Agent pipeline + Live feed. Market and
- *  Positions close the page. All real data via the shared SWR layer. */
+/** Overview (cockpit): three columns - left brief + book; center one
+ *  Plan-vs-reality card (equity + odds on a Y-tight cone; compact orbit
+ *  only while a pass runs or kill is on); right needs-you + pipeline +
+ *  feed. Market and Positions close the page. Shared SWR layer. */
 
 import Link from "next/link";
 import { useMemo } from "react";
 import { fmtTs, fmtUsd } from "@/lib/api";
 import { useApi } from "@/lib/data";
 import { Badge, Button, Panel, Skeleton, useTweenNumber } from "@/components/ui";
-import { GoalOrbit, StarfieldBackdrop } from "@/components/orbit";
+import { GoalOrbit } from "@/components/orbit";
 import { ProbStrip, TrajectoryHero } from "@/components/trajectory";
 import { MarketPanel, type WatchGroup } from "@/components/market";
 import { Pipeline } from "@/components/pipeline";
@@ -137,7 +136,7 @@ function StrategyBook({ instances }: { instances: Instance[] }) {
 
 // ------------------------------------------------------------- center hero
 
-function Hero({
+function PlanHero({
   state,
   bands,
   equityCurve,
@@ -146,7 +145,6 @@ function Hero({
   state: EngineState;
   bands: BandsDoc | null;
   equityCurve: { t: string; equity: number }[];
-  /** pass running / kill switch: the orbit takes the hero slot */
   orbitState: "idle" | "pass" | "kill";
 }) {
   const goal = state.goal!;
@@ -169,31 +167,40 @@ function Hero({
   const daysLeft = Math.max(0, Math.round(totalDays - elapsed));
 
   return (
-    <Panel className="relative flex flex-col justify-center gap-3 overflow-hidden p-6">
-      {orbitState !== "idle" ? (
-        <>
-          <div className="flex items-baseline justify-between">
-            <span className="kicker">Equity</span>
-            <span className="num text-sm text-mist">{fmtUsd(equity)}</span>
-          </div>
-          {orbitState === "kill" && (
-            <div className="text-sm font-medium text-coral">
-              Stopped - no new risk until you release the kill switch.
-            </div>
-          )}
-          <GoalOrbit start={base} equity={equity} target={target} odds={plan?.probability ?? 0} />
-        </>
-      ) : (
-        <>
-          {/* idle keeps the night sky: a static, subdued constellation */}
-          <StarfieldBackdrop />
-          <div className="hero-num relative text-gold">{fmtUsd(equity)}</div>
-        </>
+    <Panel className="flex min-w-0 flex-col gap-3 overflow-hidden p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="kicker">Plan vs reality</span>
+        {plan && <span className="num text-micro text-mist">{daysLeft} days left</span>}
+      </div>
+
+      {orbitState === "kill" && (
+        <div className="text-sm font-medium text-coral">
+          Stopped - no new risk until you release the kill switch.
+        </div>
       )}
+
+      {orbitState === "idle" ? (
+        <div className="hero-num text-gold">{fmtUsd(equity)}</div>
+      ) : (
+        <div className="flex items-baseline justify-between">
+          <span className="kicker">Equity</span>
+          <span className="num text-sm text-mist">{fmtUsd(equity)}</span>
+        </div>
+      )}
+
+      {orbitState !== "idle" && (
+        <GoalOrbit
+          compact
+          start={base}
+          equity={equity}
+          target={target}
+          odds={plan?.probability ?? 0}
+        />
+      )}
+
       {plan && (
         <>
-          {/* odds are a star moment: the number wears gold (contract §2) */}
-          <div className="relative flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="num text-2xl font-medium text-gold">
               {(plan.probability * 100).toFixed(0)}%
             </span>
@@ -201,16 +208,28 @@ function Hero({
               probability of reaching {fmtUsd(target, 0)}
             </span>
           </div>
-          <div className="relative h-1.5 overflow-hidden rounded-full bg-line">
+          <div className="h-1.5 overflow-hidden rounded-full bg-line">
             <div
               className="h-full rounded-full bg-gold transition-[width] duration-500"
               style={{ width: `${Math.max(0.5, progress * 100)}%` }}
             />
           </div>
-          <div className="relative flex justify-between font-mono text-micro text-mist">
-            <span>{daysLeft} days left</span>
-            <span>Pass line {fmtUsd(target, 0)}</span>
-          </div>
+          <TrajectoryHero
+            bands={bands?.bands?.p50?.length ? bands.bands : null}
+            months={bands?.months ?? goal.horizon_months ?? 12}
+            target={goal.target_amount ?? bands?.target_amount ?? null}
+            base={goal.capital_base}
+            start={bands?.start}
+            equity={equityCurve}
+            height={208}
+          />
+          {bands?.bands?.p50?.length ? (
+            <ProbStrip
+              bands={bands.bands}
+              base={goal.capital_base}
+              target={goal.target_amount ?? bands?.target_amount ?? null}
+            />
+          ) : null}
         </>
       )}
     </Panel>
@@ -322,7 +341,6 @@ export default function Overview() {
   }
 
   const goal = state.goal;
-  const plan = state.plan;
   const passRunning = passProgress?.status === "running";
   const orbitState: "idle" | "pass" | "kill" = state.kill_switch
     ? "kill"
@@ -367,35 +385,9 @@ export default function Overview() {
             <StrategyBook instances={instances} />
           </div>
 
-          {/* center: hero + plan-vs-reality */}
+          {/* center: one plan-vs-reality card */}
           <div className="flex min-w-0 flex-col gap-3">
-            <Hero state={state} bands={bands} equityCurve={equityCurve} orbitState={orbitState} />
-            {plan && (
-              <Panel className="p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="kicker">Plan vs reality</span>
-                  <span className="num text-micro text-mist">
-                    {(plan.probability * 100).toFixed(0)}% odds · estimate
-                  </span>
-                </div>
-                <TrajectoryHero
-                  bands={bands?.bands?.p50?.length ? bands.bands : null}
-                  months={bands?.months ?? goal.horizon_months ?? 12}
-                  target={goal.target_amount ?? bands?.target_amount ?? null}
-                  base={goal.capital_base}
-                  start={bands?.start}
-                  equity={equityCurve}
-                />
-                {bands?.bands?.p50?.length ? (
-                  <ProbStrip
-                    bands={bands.bands}
-                    base={goal.capital_base}
-                    target={goal.target_amount ?? bands?.target_amount ?? null}
-                    probability={plan.probability}
-                  />
-                ) : null}
-              </Panel>
-            )}
+            <PlanHero state={state} bands={bands} equityCurve={equityCurve} orbitState={orbitState} />
           </div>
 
           {/* right: needs you + pipeline + feed */}
@@ -429,7 +421,7 @@ export default function Overview() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]">
         <Panel className="p-4">
           <MarketPanel symbols={chartSymbols} groups={watchGroups} forecastDoc={forecastDoc} />
         </Panel>

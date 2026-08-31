@@ -90,11 +90,14 @@ export function GoalOrbit({
   equity,
   target,
   odds,
+  compact = false,
 }: {
   start: number;
   equity: number;
   target: number;
   odds: number;
+  /** Overview pass/kill strip: keep the signature without a second empty card. */
+  compact?: boolean;
 }) {
   const progress = clamp((equity - start) / Math.max(target - start, 1), 0, 1);
   const over = equity > target;
@@ -107,7 +110,11 @@ export function GoalOrbit({
   const showShipLabel = progress <= 0.97 && !over;
 
   return (
-    <div className="starfield relative h-full min-h-52 overflow-hidden rounded-xl">
+    <div
+      className={`starfield relative overflow-hidden rounded-xl ${
+        compact ? "min-h-36" : "h-full min-h-52"
+      }`}
+    >
       <svg
         viewBox={`0 0 ${G.w} ${G.h}`}
         className="h-auto w-full"

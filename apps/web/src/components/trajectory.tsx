@@ -19,8 +19,24 @@ import { fmtUsd } from "@/lib/api";
 import { AXIS_TICK, CHART, RECHARTS_TOOLTIP } from "@/lib/theme";
 
 const DAYS_PER_MONTH = 30.44;
+/** Y-axis follows current equity + the near cone, not month-12 p90. */
+const FOCUS_MONTHS = 3;
 
 type Bands = { p10: number[]; p50: number[]; p90: number[] };
+
+/** Tight money domain: include the pass line, clip the far lucky tail. */
+export function focusYDomain(values: number[], padFrac = 0.1): [number, number] | ["auto", "auto"] {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return ["auto", "auto"];
+  const lo = Math.min(...finite);
+  const hi = Math.max(...finite);
+  if (lo === hi) {
+    const slack = Math.max(Math.abs(lo) * 0.02, 500);
+    return [lo - slack, hi + slack];
+  }
+  const pad = (hi - lo) * padFrac;
+  return [lo - pad, hi + pad];
+}
 
 export function TrajectoryHero({
   bands,
@@ -29,6 +45,7 @@ export function TrajectoryHero({
   base,
   start,
   equity,
+  height = 260,
   className = "",
 }: {
   bands: Bands | null;
@@ -42,6 +59,7 @@ export function TrajectoryHero({
   start?: string;
   /** actual equity curve */
   equity: { t: string; equity: number }[];
+  height?: number;
   className?: string;
 }) {
   // Guard against a degraded bands doc (thin data -> null subfields upstream).
@@ -83,6 +101,19 @@ export function TrajectoryHero({
   const todayD = actualRows.length > 0 ? actualRows[actualRows.length - 1].d : null;
 
   const lastEquity = equity.length > 0 ? equity[equity.length - 1].equity : null;
+  const nearD = Math.max(FOCUS_MONTHS * DAYS_PER_MONTH, (todayD ?? 0) + DAYS_PER_MONTH);
+  const lastP50 = usableBands?.p50[usableBands.p50.length - 1];
+  // Include median landing so the pass line is not glued to the chart roof;
+  // still omit far p90 so a lucky tail cannot empty the pane.
+  const yDomain = focusYDomain([
+    ...actualRows.map((r) => r.equity),
+    ...coneRows
+      .filter((r) => r.d <= nearD)
+      .flatMap((r) => [r.band[0], r.band[1], r.p50]),
+    ...(base != null ? [base] : []),
+    ...(target != null ? [target] : []),
+    ...(lastP50 != null ? [lastP50] : []),
+  ]);
   const ariaLabel =
     lastEquity != null && target != null
       ? `Plan versus reality chart. Actual equity ${fmtUsd(lastEquity)}, target ${fmtUsd(target)}${
@@ -98,10 +129,10 @@ export function TrajectoryHero({
 
   return (
     <div className={className} role="img" aria-label={ariaLabel}>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={height}>
         {/* accessibilityLayer would add a focusable role="application" inside
             this role="img" wrapper - a tab stop that reads axis noise. */}
-        <ComposedChart margin={{ top: 10, right: 12, bottom: 0, left: 0 }} accessibilityLayer={false}>
+        <ComposedChart margin={{ top: 8, right: 12, bottom: 0, left: 0 }} accessibilityLayer={false}>
           <XAxis
             type="number"
             dataKey="d"
@@ -113,11 +144,11 @@ export function TrajectoryHero({
             tickFormatter={(d: number) => `+${Math.round(d / DAYS_PER_MONTH)}mo`}
           />
           <YAxis
-            domain={["auto", "auto"]}
+            domain={yDomain}
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={false}
-            width={56}
+            width={52}
             tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
           />
           <Tooltip
@@ -215,12 +246,10 @@ export function ProbStrip({
   bands,
   base,
   target,
-  probability,
 }: {
   bands: Bands | null;
   base: number;
   target: number | null;
-  probability: number;
 }) {
   if (
     !bands ||
@@ -286,8 +315,7 @@ export function ProbStrip({
         )}
       </div>
       <p className="mt-1 font-mono text-micro text-mist">
-        {Math.round(probability * 100)}% of simulated paths reach the target · Monte Carlo on
-        historical returns · estimate, not a promise
+        Terminal outcomes · Monte Carlo on historical returns · estimate, not a promise
       </p>
     </div>
   );

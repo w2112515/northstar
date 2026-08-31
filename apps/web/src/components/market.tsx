@@ -140,8 +140,9 @@ function Chart({
         horzLine: { labelBackgroundColor: CHART.line },
         vertLine: { labelBackgroundColor: CHART.line },
       },
-      // the page owns the scroll wheel; drag to pan, pinch to zoom,
-      // double-click resets to the selected range
+      // terminal convention: wheel zooms the time scale (pointer over the
+      // pane consumes the event so the page does not scroll). Drag pans;
+      // double-click resets to the selected range.
       handleScroll: {
         mouseWheel: false,
         pressedMouseMove: true,
@@ -149,7 +150,7 @@ function Chart({
         vertTouchDrag: false,
       },
       handleScale: {
-        mouseWheel: false,
+        mouseWheel: true,
         pinch: true,
         axisPressedMouseMove: true,
         axisDoubleClickReset: false,
@@ -427,7 +428,7 @@ export function MarketPanel({
   if (symbols.length === 0) return null;
 
   return (
-    <div className="flex h-full min-h-72 flex-col">
+    <div className="flex h-full min-h-[28rem] flex-col">
       <div className="flex min-w-0 items-center gap-2">
         <span className="kicker">Market</span>
         <span className="text-sm font-medium text-ink">{active}</span>
@@ -486,130 +487,130 @@ export function MarketPanel({
       )}
       {pinMsg && <p className="mt-1 text-right font-mono text-micro text-coral">{pinMsg}</p>}
 
-      <div className={`relative mt-2 h-44 min-h-0 flex-1 ${!inSync ? "opacity-60" : ""}`}>
-        {/* OHLCV + MA legend, crosshair-synced (decorative duplicate of chart data) */}
-        {legendBar && !err && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute left-1.5 top-1 z-10 select-none font-mono text-micro leading-4"
-          >
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-ink">
-                {active} <span className="text-mist">· D</span>
-              </span>
-              {(
-                [
-                  ["O", legendBar.o],
-                  ["H", legendBar.h],
-                  ["L", legendBar.l],
-                  ["C", legendBar.c],
-                ] as const
-              ).map(([k, v]) => (
-                <span key={k} className="text-mist">
-                  {k}{" "}
-                  <span className={legendBar.c >= legendBar.o ? "text-teal" : "text-coral"}>
-                    {fmtNum(v)}
+      <div className="mt-2 grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_11rem]">
+        <div className="min-w-0">
+          <div className={`relative h-[22rem] ${!inSync ? "opacity-60" : ""}`}>
+            {legendBar && !err && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute left-1.5 top-1 z-10 select-none font-mono text-micro leading-4"
+              >
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-ink">
+                    {active} <span className="text-mist">· D</span>
                   </span>
-                </span>
-              ))}
-              {legendChg != null && (
-                <span className={legendChg < 0 ? "text-coral" : "text-teal"}>
-                  {fmtPct(legendChg, 2)}
-                </span>
-              )}
-              {legendBar.v > 0 && (
-                <span className="text-mist">
-                  Vol <span className="text-ink">{fmtVol(legendBar.v)}</span>
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              {ma20ByT.has(legendBar.t) && (
-                <span style={{ color: MA_FAST }}>MA20 {fmtNum(ma20ByT.get(legendBar.t)!)}</span>
-              )}
-              {ma50ByT.has(legendBar.t) && (
-                <span style={{ color: MA_SLOW }}>MA50 {fmtNum(ma50ByT.get(legendBar.t)!)}</span>
-              )}
-            </div>
-          </div>
-        )}
-        {inSync && err ? (
-          <p className="py-10 text-center text-sm text-mist">{err}</p>
-        ) : !inSync || bars.length === 0 ? (
-          <p className="py-10 text-center font-mono text-micro text-mist">Loading {active} candles…</p>
-        ) : (
-          <Chart
-            bars={bars}
-            markers={markers}
-            forecast={fc}
-            ma20={ma20}
-            ma50={ma50}
-            rangeDays={rangeDays}
-            onHover={onHover}
-          />
-        )}
-      </div>
-
-      {/* range switcher, TradingView bottom-bar style */}
-      <div className="mt-1 flex items-center gap-0.5">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => setRangeKey(r.key)}
-            aria-pressed={r.key === rangeKey}
-            className={`h-6 rounded-sm px-2 font-mono text-micro transition-colors duration-150 ${
-              r.key === rangeKey ? "bg-panel text-ink" : "text-mist hover:text-ink"
-            }`}
-          >
-            {r.key}
-          </button>
-        ))}
-        <span className="ml-auto hidden font-mono text-micro text-mist/75 sm:block">
-          drag to pan · double-click resets
-        </span>
-      </div>
-
-      {/* watchlist: Symbol | Last | Chg% (one batched quotes call) */}
-      <div className="mt-2 max-h-40 space-y-0.5 overflow-y-auto">
-        {railGroups.map((g) => (
-          <div key={g.label || "all"}>
-            {g.label && (
-              <div className="px-2 pt-1.5 font-mono text-micro uppercase tracking-[0.12em] text-mist">
-                {g.label}
+                  {(
+                    [
+                      ["O", legendBar.o],
+                      ["H", legendBar.h],
+                      ["L", legendBar.l],
+                      ["C", legendBar.c],
+                    ] as const
+                  ).map(([k, v]) => (
+                    <span key={k} className="text-mist">
+                      {k}{" "}
+                      <span className={legendBar.c >= legendBar.o ? "text-teal" : "text-coral"}>
+                        {fmtNum(v)}
+                      </span>
+                    </span>
+                  ))}
+                  {legendChg != null && (
+                    <span className={legendChg < 0 ? "text-coral" : "text-teal"}>
+                      {fmtPct(legendChg, 2)}
+                    </span>
+                  )}
+                  {legendBar.v > 0 && (
+                    <span className="text-mist">
+                      Vol <span className="text-ink">{fmtVol(legendBar.v)}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  {ma20ByT.has(legendBar.t) && (
+                    <span style={{ color: MA_FAST }}>MA20 {fmtNum(ma20ByT.get(legendBar.t)!)}</span>
+                  )}
+                  {ma50ByT.has(legendBar.t) && (
+                    <span style={{ color: MA_SLOW }}>MA50 {fmtNum(ma50ByT.get(legendBar.t)!)}</span>
+                  )}
+                </div>
               </div>
             )}
-            <ul>
-              {g.symbols.map((s) => {
-                const qt = quotes[s];
-                return (
-                  <li key={s}>
-                    <button
-                      type="button"
-                      onClick={() => setSel(s)}
-                      aria-pressed={s === active}
-                      className={`grid min-h-11 w-full grid-cols-[1fr_auto_auto] items-center gap-3 rounded-sm px-2 text-left text-xs transition-[background-color,color] duration-150 md:min-h-8 ${
-                        s === active ? "bg-panel text-ink" : "text-mist hover:bg-panel/60 hover:text-ink"
-                      }`}
-                    >
-                      <span className="num">{s}</span>
-                      <span className="num text-right text-ink">
-                        {qt ? fmtNum(qt.last) : "—"}
-                      </span>
-                      <span
-                        className={`num w-14 text-right ${
-                          qt?.chg == null ? "text-mist/75" : qt.chg < 0 ? "text-coral" : "text-teal"
+            {inSync && err ? (
+              <p className="py-10 text-center text-sm text-mist">{err}</p>
+            ) : !inSync || bars.length === 0 ? (
+              <p className="py-10 text-center font-mono text-micro text-mist">Loading {active} candles…</p>
+            ) : (
+              <Chart
+                bars={bars}
+                markers={markers}
+                forecast={fc}
+                ma20={ma20}
+                ma50={ma50}
+                rangeDays={rangeDays}
+                onHover={onHover}
+              />
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-0.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRangeKey(r.key)}
+                aria-pressed={r.key === rangeKey}
+                className={`h-6 rounded-sm px-2 font-mono text-micro transition-colors duration-150 ${
+                  r.key === rangeKey ? "bg-panel text-ink" : "text-mist hover:text-ink"
+                }`}
+              >
+                {r.key}
+              </button>
+            ))}
+            <span className="ml-auto hidden font-mono text-micro text-mist/75 sm:block">
+              scroll to zoom · drag to pan · double-click resets
+            </span>
+          </div>
+        </div>
+
+        <div className="max-h-56 space-y-0.5 overflow-y-auto md:max-h-[22rem]">
+          {railGroups.map((g) => (
+            <div key={g.label || "all"}>
+              {g.label && (
+                <div className="px-2 pt-1.5 font-mono text-micro uppercase tracking-[0.12em] text-mist">
+                  {g.label}
+                </div>
+              )}
+              <ul>
+                {g.symbols.map((s) => {
+                  const qt = quotes[s];
+                  return (
+                    <li key={s}>
+                      <button
+                        type="button"
+                        onClick={() => setSel(s)}
+                        aria-pressed={s === active}
+                        className={`grid min-h-11 w-full grid-cols-[1fr_auto_auto] items-center gap-3 rounded-sm px-2 text-left text-xs transition-[background-color,color] duration-150 md:min-h-8 ${
+                          s === active ? "bg-panel text-ink" : "text-mist hover:bg-panel/60 hover:text-ink"
                         }`}
                       >
-                        {qt?.chg != null ? fmtPct(qt.chg, 2) : ""}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                        <span className="num">{s}</span>
+                        <span className="num text-right text-ink">
+                          {qt ? fmtNum(qt.last) : "—"}
+                        </span>
+                        <span
+                          className={`num w-14 text-right ${
+                            qt?.chg == null ? "text-mist/75" : qt.chg < 0 ? "text-coral" : "text-teal"
+                          }`}
+                        >
+                          {qt?.chg != null ? fmtPct(qt.chg, 2) : ""}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
       <p className="mt-1.5 font-mono text-micro text-mist">
         real candles · arrows are our own fills · dashed lines are the TimesFM band (model
