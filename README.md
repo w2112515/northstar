@@ -72,7 +72,7 @@ Gemini** for orchestration and judgment, and **Alpaca** for real (paper) options
 ```mermaid
 flowchart LR
     subgraph GCP["Google Cloud Run"]
-        WEB["Next.js — Night Ledger UI<br/>Track / Activity / Proof / System / start"]
+        WEB["Next.js cockpit<br/>Overview / Research / Strategies / Journal / onboarding"]
         subgraph API["FastAPI + ADK 2.x (max-instances 1)"]
             LOOP["TradingLoop graph<br/>perceive → prefilter → triage → signals<br/>→ compile → GATE → execute → explain → record"]
             EVO["Evolution loop<br/>walk-forward → deflated Sharpe<br/>→ human approval → paper trial"]
@@ -115,19 +115,18 @@ proposes and narrates; it holds no order tools.
   recomputed nightly from live equity.
 - **Market weather:** 3-source 0-100 index (SPY realized vol, Alpaca headline
   tone, GDELT global tone) gates NEW risk in storms; validated by an honest
-  walk-forward study on the System page (vol proxy, labeled). Also exposed as an
+  walk-forward study on Research → Compass (vol proxy, labeled). Also exposed as an
   **A2A agent** (`/a2a/weather/.well-known/agent-card.json`): any A2A client
   can discover it and query the exact reading our risk gate consumes —
   deterministic, no LLM per query.
 - **TimesFM forecasts:** Google's time-series foundation model (zero-shot)
   draws 5-day quantile bands (q10/q50/q90) for every traded symbol nightly.
   Decision support only — it feeds the AI analyst's fact sheet, the forecast
-  bands on the Activity market chart and the scorecard fan on Proof, never an
-  order trigger.
+  bands on the Overview market chart and the TimesFM fan on Research → Compass,
+  never an order trigger.
 - **Glass-box passes:** every ADK pass journals a node-by-node trace (wall
-  time per node, which nodes used Gemini vs template); the Activity page
-  renders the live run schematic — agentic UX means you can audit the loop,
-  not trust it.
+  time per node, which nodes used Gemini vs template); Overview renders the
+  live Agent pipeline — agentic UX means you can audit the loop, not trust it.
 - **HITL:** soft breaker / cooldown / storm weather / evolution promotions
   create approval cards; pending ones expire to auto-reject on a timer. The
   loop never blocks on a human.
@@ -135,17 +134,11 @@ proposes and narrates; it holds no order tools.
   broker-reported equity plus the journal's realized-P&L attribution; the
   night watch also files a one-page markdown daily report (equity, trades,
   regime, scout highlights, captain's log) at `GET /api/report/daily`.
-- **Research flywheel surfaces (Night Ledger IA):** **Activity** carries the
-  Scout report (Top-K table with plain-English reasons, options-watch line,
-  Scan now) plus a regime/weather context strip and the live run schematic
-  with its scout/weather/TimesFM satellites; **Track** carries the daily
-  brief (Captain's-log narration as a labeled field note) and the Needs-you
-  block where Advisor tilts and evolution promotions wait for your call;
-  **System** carries evolution rounds, the DSL Shipyard, factor mining with
-  library decay flags, weather-floor validation and per-family regime stats;
-  **Proof** carries the forecast scorecard and gate-rejection statistics.
-  Every loop degrades honestly and can be disabled per-flag (see
-  `.env.example`).
+- **Surfaces:** **Overview** is the daily desk (brief, Plan vs reality, Market,
+  Needs you, Agent pipeline, Live feed). **Research** is Radar / Compass /
+  Evolution / Mining. **Strategies** is the switchboard. **Journal** is the
+  append-only record. Goal wizard is `/onboarding`. Every loop degrades
+  honestly and can be disabled per-flag (see `.env.example`).
 
 ## Run it
 
@@ -164,7 +157,7 @@ cd apps/web; npm install; cd ../..
 
 # smoke test + one full loop pass
 .\scripts\smoke.ps1
-# then in the UI: Activity -> Controls -> "Run one pass now"
+# then in the UI: Overview -> "Run one pass"
 ```
 
 Tests: `cd apps/api; uv run pytest` (risk gate, compiler, copy-honesty lint).

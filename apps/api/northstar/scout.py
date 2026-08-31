@@ -214,6 +214,28 @@ def tilted_weights(store) -> tuple[dict[str, float], str]:
 
 # --------------------------------------------------------------------------- run + read
 
+def _history_as_reports(raw: Any) -> list[list[str]]:
+    """Coerce persisted scout history into list[list[symbol]].
+
+    New writes store each report as a comma-joined string so Firestore can
+    accept the document. Older local-store docs may still be list[list[str]].
+    """
+    out: list[list[str]] = []
+    if not raw:
+        return out
+    for report in raw:
+        if isinstance(report, str):
+            out.append([s for s in report.split(",") if s])
+        elif isinstance(report, dict):
+            out.append([str(s) for s in (report.get("symbols") or []) if s])
+        elif isinstance(report, list):
+            if report and isinstance(report[0], list):
+                out.append([str(s) for s in report[0] if s])
+            else:
+                out.append([str(s) for s in report if s and not isinstance(s, list)])
+    return out
+
+
 def run_scout(store, top_k: int = TOP_K, weights: dict[str, float] | None = None) -> dict[str, Any]:
     """One scan: boards -> floor -> score -> journal + state. Degrades to the
     core universe (with an honest note) if the screener is unavailable."""
@@ -243,10 +265,13 @@ def run_scout(store, top_k: int = TOP_K, weights: dict[str, float] | None = None
     candidates, passed = rank_candidates(bars, origins, weights, top_k=top_k)
 
     prev = store.get("state", "scout") or {}
-    history: list[list[str]] = list(prev.get("history", []))
-    history.append([c["symbol"] for c in candidates])
-    history = history[-RECENT_REPORTS_KEPT:]
-    recent_pool = sorted({s for report in history for s in report})
+    history_syms = _history_as_reports(prev.get("history"))
+    history_syms.append([c["symbol"] for c in candidates])
+    history_syms = history_syms[-RECENT_REPORTS_KEPT:]
+    recent_pool = sorted({s for report in history_syms for s in report})
+    # Firestore rejects nested arrays (list[list[str]]). Persist each
+    # report as one comma-joined string; readers coerce both shapes.
+    history = [",".join(report) for report in history_syms]
 
     doc = {
         "ts": datetime.now(timezone.utc).isoformat(),

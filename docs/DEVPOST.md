@@ -212,9 +212,9 @@ generalizes beyond trading.
 
 1. Open https://northstar-web-251608445238.us-central1.run.app → cockpit loads
    with live paper equity in the status ribbon.
-2. Helm → "Run one pass now" → watch the agent graph light up node by node.
-3. When the pass lands: Live feed shows proposal → verdict (reason codes) →
-   digest in plain English. If the AI proposed anything, the Debate card shows
-   the bull case, the bear case, and who won.
+2. Overview → **Run one pass** → watch the agent graph light up node by node
+   (AI = Gemini, CODE = deterministic).
+3. Journal → **verdict** → open a rejection (reason codes on the record).
+   Live feed on Overview shows the same pass as digest / trace.
 4. `curl https://northstar-web-251608445238.us-central1.run.app/a2a/weather/.well-known/agent-card.json`
    — a second agent discovering our weather station over A2A.

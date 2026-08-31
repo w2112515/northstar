@@ -103,6 +103,8 @@ def test_run_scout_journals_report_and_accumulates_pool(monkeypatch):
     assert s.event_log[-1].kind == "scout"
     assert "AAA" in s.event_log[-1].human
     assert scout_symbols(s)[0] == "AAA"
+    # Firestore forbids nested arrays — each report must persist as one string
+    assert all(isinstance(h, str) for h in doc["history"])
 
     # next night the board rotates; pool keeps yesterday's names for exits
     _patch_market(monkeypatch, ["CCC"], {"CCC": frame(drift=0.005), "SPY": frame()})
