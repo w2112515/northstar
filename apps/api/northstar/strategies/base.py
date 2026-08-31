@@ -8,6 +8,11 @@ import pandas as pd
 from northstar.domain import Goal, Plan, StrategyInstance, TradeProposal
 
 
+def _is_occ_option_of(symbol: str, underlying: str) -> bool:
+    """OCC symbols are exactly root + YYMMDD + C/P + 8-digit strike (root+15)."""
+    return symbol.startswith(underlying) and len(symbol) == len(underlying) + 15
+
+
 @dataclass
 class EngineContext:
     account: dict[str, Any]
@@ -38,11 +43,21 @@ class EngineContext:
     def option_positions(self, underlying: str) -> list[dict[str, Any]]:
         return [
             p for p in self.positions
-            if p["asset_class"] == "us_option" and p["symbol"].startswith(underlying)
+            if p["asset_class"] == "us_option" and _is_occ_option_of(p["symbol"], underlying)
         ]
 
-    def has_open_order_for(self, symbol_prefix: str) -> bool:
-        return any(o["symbol"].startswith(symbol_prefix) for o in self.open_orders)
+    def has_open_order_for(self, symbol: str) -> bool:
+        """An open order for exactly this symbol (dedup: don't resubmit).
+
+        Exact match on purpose: an option order must not block its underlying's
+        stock trades (a working PURR put once froze PURR equity buys for a day),
+        and GOOG must not shadow GOOGL.
+        """
+        return any(o["symbol"] == symbol for o in self.open_orders)
+
+    def has_open_option_order_for(self, underlying: str) -> bool:
+        """Any open OCC option order on this underlying (one structure per name)."""
+        return any(_is_occ_option_of(o["symbol"], underlying) for o in self.open_orders)
 
     def allocation_equity(self, weight: float) -> float:
         return self.equity() * weight

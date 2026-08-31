@@ -17,7 +17,7 @@ from northstar.broker import (
     get_open_orders,
     get_positions,
 )
-from northstar.compiler import compile_proposal
+from northstar.compiler import LIVE_COMPILABLE, compile_proposal
 from northstar.compiler.options import CompileError, occ_strike
 from northstar.earnings import prune_past
 from northstar.config import get_settings
@@ -72,6 +72,15 @@ PROGRAMS = {
 DEFAULT_WEIGHTS = {"wheel": 0.5, "momentum_rotation": 0.3}
 TRIAL_WEIGHT = 0.1  # allocation cap for instances on paper trial
 DEFAULT_GUARDRAILS = Guardrails(max_loss_per_trade_pct=0.01)
+
+# Families whose proposals carry a different strategy_type than the family name.
+_FAMILY_STRATEGY_TYPES = {"wheel": ("cash_secured_put", "covered_call")}
+
+
+def family_live(family: str) -> bool:
+    """Can this family's proposals compile into real orders today?"""
+    types = _FAMILY_STRATEGY_TYPES.get(family, (family,))
+    return any(t in LIVE_COMPILABLE for t in types)
 
 # Equity rotation sleeves get a hard budget at the gate: existing sleeve value
 # + new buy must stay under weight * equity * slack. The slack absorbs honest
@@ -334,6 +343,8 @@ def collect_proposals(
         program = PROGRAMS.get(inst.family)
         if program is None:
             continue
+        if not family_live(inst.family):
+            continue  # backtest-only family (A-milestone): keep it out of the live pipeline
         weight = (
             weights.get(inst.family) if weights and inst.family in weights
             else DEFAULT_WEIGHTS.get(inst.family, 0.2)

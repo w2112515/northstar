@@ -43,7 +43,7 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
     proposals: list[TradeProposal] = []
 
     for und in underlyings:
-        if ctx.has_open_order_for(und) or ctx.option_positions(und):
+        if ctx.has_open_order_for(und) or ctx.has_open_option_order_for(und) or ctx.option_positions(und):
             continue  # one options structure per name at a time
         df = ctx.bars.get(und)
         if df is None or len(df) < trend_days + 5:

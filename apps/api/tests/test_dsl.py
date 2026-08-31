@@ -163,8 +163,10 @@ def test_run_shipyard_round_disable_flag(monkeypatch):
     assert run_shipyard_round(FakeStore()).get("skipped")
 
 
-def test_decide_evolution_births_dsl_instance(monkeypatch):
-    """Approving a shipyard experiment creates a dsl_rotation trial instance."""
+def test_decide_evolution_refuses_dsl_trial_until_live_compilable(monkeypatch):
+    """dsl_rotation is backtest-only (A-milestone): approving a shipyard
+    experiment must NOT bench a champion for a trial that can never trade.
+    Rejecting the experiment still works."""
     import northstar.evolution.loop as loop
     from northstar.domain import BacktestReport, EvolutionExperiment
     from northstar.evolution import decide_evolution
@@ -180,12 +182,15 @@ def test_decide_evolution_births_dsl_instance(monkeypatch):
         status="awaiting_approval",
     )
     s.save("experiments", exp.id, exp.model_dump())
+
     out = decide_evolution(exp.id, approve=True)
-    assert out["ok"] and out["decision"] == "trial"
-    inst = out["instance"]
-    assert inst["family"] == "dsl_rotation" and inst["strategy_type"] == "dsl_rotation"
-    assert inst["params"]["spec"]["name"] == spec["name"]
-    assert inst["status"] == "trial"
+    assert out["ok"] is False and "backtest-only" in out["error"]
+    assert s.list("instances") == []  # no trial born, nothing benched
+    assert s.get("experiments", exp.id)["status"] == "awaiting_approval"
+
+    # a human can still archive it
+    out = decide_evolution(exp.id, approve=False)
+    assert out["ok"] and out["decision"] == "archived"
 
 
 # --------------------------------------------------------------------------- live adapter

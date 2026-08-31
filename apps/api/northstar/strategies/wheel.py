@@ -39,7 +39,8 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
     proposals: list[TradeProposal] = []
 
     for und in underlyings:
-        if ctx.has_open_order_for(und):
+        # one working order per name: skip on the stock itself or any of its options
+        if ctx.has_open_order_for(und) or ctx.has_open_option_order_for(und):
             continue
         # affordability: a delta-0.25 put's collateral is roughly price*0.90 x100
         df = ctx.bars.get(und)

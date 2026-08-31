@@ -30,7 +30,7 @@ from northstar.domain import (
     Plan,
     StrategyInstance,
 )
-from northstar.engine import active_plan, ensure_default_instances
+from northstar.engine import active_plan, ensure_default_instances, family_live
 from northstar.journal import get_store
 from northstar.llm import PRO_MODEL, generate_json, llm_available
 
@@ -427,6 +427,14 @@ def decide_evolution(experiment_id: str, approve: bool) -> dict[str, Any]:
                          payload=exp.model_dump(), refs={"experiment_id": exp.id}))
         return {"ok": True, "decision": "archived"}
 
+    if not family_live(exp.family):
+        # A live trial for a backtest-only family can never trade: it would
+        # bench the champion for TRIAL_DAYS and then "pass" on an empty window.
+        return {"ok": False, "error": (
+            f"{exp.family} is backtest-only for now (A-milestone) - a paper trial "
+            "could never place a trade, so there would be no evidence to judge."
+        )}
+
     champ = _champion(store, exp.family)
     new_version = f"v{int((champ.version if champ else 'v1')[1:]) + 1}" if champ else "v2"
     trial = {
@@ -479,6 +487,30 @@ def _trial_window_violations(store, start_iso: str) -> list[str]:
     return sorted(set(bad))
 
 
+def _trial_traded(store, inst: StrategyInstance, start_iso: str) -> bool:
+    """At least one of this instance's proposals reached a fill in the window.
+
+    A trial that never traded produced no evidence - a "clean window" by
+    absence must not promote it over a champion with a real track record.
+    """
+    start = datetime.fromisoformat(start_iso)
+    src = f"strategy:{inst.id}"
+    proposal_ids: set[str] = set()
+    filled_refs: set[str] = set()
+    for ev in store.events(kinds=["proposal", "fill"], limit=5000):
+        if datetime.fromisoformat(ev.ts) < start:
+            continue
+        if ev.kind == "proposal" and (ev.payload or {}).get("source") == src:
+            pid = (ev.refs or {}).get("proposal_id") or (ev.payload or {}).get("id")
+            if pid:
+                proposal_ids.add(str(pid))
+        elif ev.kind == "fill":
+            pid = (ev.refs or {}).get("proposal_id")
+            if pid:
+                filled_refs.add(str(pid))
+    return bool(proposal_ids & filled_refs)
+
+
 def finalize_trials(store) -> list[dict[str, Any]]:
     """Nightly: settle trials whose window has ended - promote on a clean
     window, otherwise archive the candidate and restore the benched parent."""
@@ -495,6 +527,8 @@ def finalize_trials(store) -> list[dict[str, Any]]:
             continue
 
         violations = _trial_window_violations(store, str(trial.get("start")))
+        if not violations and not _trial_traded(store, inst, str(trial.get("start"))):
+            violations = ["no fills in the window - no evidence to judge"]
         exp_id = inst.lineage.experiment_id
         exp_doc = store.get("experiments", exp_id) if exp_id else None
 

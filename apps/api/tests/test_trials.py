@@ -34,6 +34,16 @@ def approved_instance(store):
     return next(d for d in store.list("instances") if d.get("status") == "trial")
 
 
+def record_a_fill(store, inst_id):
+    """Trials need at least one filled trade in-window to earn a verdict."""
+    store.append_event(JournalEvent(kind="proposal", human="rotating in",
+                                    payload={"source": f"strategy:{inst_id}", "id": "tp_trial"},
+                                    refs={"proposal_id": "tp_trial"}))
+    store.append_event(JournalEvent(kind="fill", human="Filled.",
+                                    payload={"status": "filled"},
+                                    refs={"proposal_id": "tp_trial"}))
+
+
 def test_approve_starts_trial_not_promotion(monkeypatch):
     s = FakeStore()
     champ = seed_awaiting(s)
@@ -49,13 +59,14 @@ def test_approve_starts_trial_not_promotion(monkeypatch):
     assert s.get("experiments", "exp_1")["status"] == "trial"
 
 
-def test_clean_window_promotes(monkeypatch):
+def test_clean_window_with_a_track_record_promotes(monkeypatch):
     s = FakeStore()
     seed_awaiting(s)
     monkeypatch.setattr(loop, "get_store", lambda: s)
     loop.decide_evolution("exp_1", approve=True)
     inst = approved_instance(s)
     age_trial(s, inst["id"])
+    record_a_fill(s, inst["id"])
 
     settled = loop.finalize_trials(s)
     assert settled == [{"instance_id": inst["id"], "family": "momentum_rotation",
@@ -107,4 +118,5 @@ def test_old_events_before_window_ignored(monkeypatch):
     loop.decide_evolution("exp_1", approve=True)
     inst = approved_instance(s)
     age_trial(s, inst["id"])
+    record_a_fill(s, inst["id"])
     assert loop.finalize_trials(s)[0]["outcome"] == "promoted"

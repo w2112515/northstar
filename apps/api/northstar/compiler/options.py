@@ -406,19 +406,31 @@ def compile_equity(proposal: TradeProposal) -> OrderPlan:
     )
 
 
+# Single source of truth for what can become a real order today. Families
+# outside this set (e.g. dsl_rotation, still backtest-only) must not reach the
+# live pipeline: the engine skips their instances instead of proposing into a
+# guaranteed CompileError every pass.
+_ROUTES = {
+    "cash_secured_put": compile_csp,
+    "covered_call": compile_cc,
+    "bull_put_spread": compile_vertical,
+    "bear_call_spread": compile_vertical,
+    "bull_call_spread": compile_debit_vertical,
+    "iron_condor": compile_iron_condor,
+    "momentum_rotation": compile_equity,
+    "ma_cross_trend": compile_equity,
+    "rsi_mean_reversion": compile_equity,
+    "bollinger_reversion": compile_equity,
+    "sector_rotation": compile_equity,
+    "defensive_6040": compile_equity,
+    "ai_analyst": compile_equity,
+}
+
+LIVE_COMPILABLE = frozenset(_ROUTES)
+
+
 def compile_proposal(proposal: TradeProposal) -> OrderPlan:
-    if proposal.strategy_type == "cash_secured_put":
-        return compile_csp(proposal)
-    if proposal.strategy_type == "covered_call":
-        return compile_cc(proposal)
-    if proposal.strategy_type in ("bull_put_spread", "bear_call_spread"):
-        return compile_vertical(proposal)
-    if proposal.strategy_type == "bull_call_spread":
-        return compile_debit_vertical(proposal)
-    if proposal.strategy_type == "iron_condor":
-        return compile_iron_condor(proposal)
-    if proposal.strategy_type in ("momentum_rotation", "ma_cross_trend", "rsi_mean_reversion",
-                                   "bollinger_reversion", "sector_rotation", "defensive_6040",
-                                   "ai_analyst"):
-        return compile_equity(proposal)
-    raise CompileError(f"Strategy type {proposal.strategy_type} not compilable yet (A-milestone).")
+    route = _ROUTES.get(proposal.strategy_type)
+    if route is None:
+        raise CompileError(f"Strategy type {proposal.strategy_type} not compilable yet (A-milestone).")
+    return route(proposal)

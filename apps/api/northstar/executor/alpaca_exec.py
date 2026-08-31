@@ -17,7 +17,7 @@ from typing import Any
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 from alpaca.trading.requests import LimitOrderRequest, OptionLegRequest
 
-from northstar.broker import cancel_order, get_open_orders, trading_client
+from northstar.broker import cancel_order, get_open_orders, latest_quote, trading_client
 from northstar.domain import JournalEvent, OrderPlan
 from northstar.journal import get_store
 
@@ -228,6 +228,52 @@ def execute_order_plan(
             )
         )
         state = _track_order(plan, oid, label, market_open, wait_seconds, poll_every)
+        if (
+            state["status"] == "canceled_timeout"
+            and plan.meta.get("closing")
+            and leg.asset_class == "us_equity"
+        ):
+            state = _reprice_closing_leg(plan, leg, i, wait_seconds, poll_every) or state
         results.append({**state, "leg": leg.model_dump()})
 
     return {"order_plan_id": plan.id, "legs": results}
+
+
+def _reprice_closing_leg(
+    plan: OrderPlan, leg, i: int, wait_seconds: int, poll_every: float
+) -> dict[str, Any] | None:
+    """One escalation for a risk-reducing equity leg that timed out at mid.
+
+    'No chasing' is discipline for OPENING trades; a closing/rotation order
+    repriced at a stale mid every pass just never fills in a trending market
+    (observed live: a rotation sell timed out 4+ passes in a row). Cross the
+    spread once - sell at bid, buy back at ask - with half the wait; if even
+    that misses, give up and let the next pass retry. Options keep the
+    original discipline: their spreads are too wide to cross blindly.
+    """
+    store = get_store()
+    try:
+        q = latest_quote(leg.symbol)
+        px = float(q["bid"] if leg.side == "sell" else q["ask"])
+    except Exception:
+        return None
+    if px <= 0:
+        return None
+
+    crossed = leg.model_copy(update={"limit_price": round(px, 2)})
+    label = f"{leg.side} {int(leg.qty)} {leg.symbol}"
+    submitted = _submit_leg(crossed, client_order_id=f"{plan.id}-{i}-x")
+    oid = str(submitted.id)
+    store.append_event(
+        JournalEvent(
+            kind="order",
+            human=(
+                f"Repriced to cross the spread: {label} limit ${crossed.limit_price:.2f} "
+                "(risk-reducing order missed at mid - completing beats price here)."
+            ),
+            payload={"order_id": oid, "leg": crossed.model_dump(), "order_plan_id": plan.id,
+                     "escalation": "cross_spread"},
+            refs={"order_plan_id": plan.id, "proposal_id": plan.proposal_id},
+        )
+    )
+    return _track_order(plan, oid, label, True, max(30, wait_seconds // 2), poll_every)

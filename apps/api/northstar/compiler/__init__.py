@@ -1,3 +1,3 @@
-from .options import compile_proposal
+from .options import LIVE_COMPILABLE, compile_proposal
 
-__all__ = ["compile_proposal"]
+__all__ = ["LIVE_COMPILABLE", "compile_proposal"]
