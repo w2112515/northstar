@@ -11,16 +11,58 @@ The executor never decides anything.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 from alpaca.trading.requests import LimitOrderRequest, OptionLegRequest
 
-from northstar.broker import trading_client
+from northstar.broker import cancel_order, get_open_orders, trading_client
 from northstar.domain import JournalEvent, OrderPlan
 from northstar.journal import get_store
 
 TERMINAL = {"filled", "canceled", "expired", "rejected", "done_for_day"}
+
+STALE_ORDER_HOURS = 20
+
+
+def sweep_stale_orders() -> list[str]:
+    """Cancel exchange orders that survived a prior session.
+
+    A limit order left working overnight pins yesterday's price to today's
+    market, and - because strategies skip any symbol that already has an open
+    order - it silently blocks the very name it was meant to trade. 20h spares
+    same-session retries and pre-open queue orders but clears anything that
+    crossed an overnight gap.
+    """
+    store = get_store()
+    now = datetime.now(timezone.utc)
+    swept: list[str] = []
+    for o in get_open_orders():
+        created = o.get("created_at")
+        if not created:
+            continue
+        age_hours = (now - datetime.fromisoformat(created)).total_seconds() / 3600.0
+        if age_hours < STALE_ORDER_HOURS:
+            continue
+        try:
+            cancel_order(o["id"])
+        except Exception:
+            continue  # already terminal or racing a fill; next pass re-checks
+        swept.append(o["id"])
+        store.append_event(
+            JournalEvent(
+                kind="order",
+                human=(
+                    f"Swept stale order from a prior session: {o.get('side')} "
+                    f"{int(o['qty']) if o.get('qty') else '?'} {o.get('symbol')} "
+                    f"limit ${o['limit_price']:.2f} sat {age_hours:.0f}h unfilled - "
+                    "canceled so the symbol is tradable again at today's prices."
+                ),
+                payload=o,
+            )
+        )
+    return swept
 
 
 def _submit_idempotent(req: LimitOrderRequest, client_order_id: str) -> Any:

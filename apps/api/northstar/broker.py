@@ -105,6 +105,10 @@ def get_open_orders() -> list[dict[str, Any]]:
     ]
 
 
+def cancel_order(order_id: str) -> None:
+    trading_client().cancel_order_by_id(order_id)
+
+
 def latest_quote(symbol: str) -> dict[str, Any]:
     q = stock_data().get_stock_latest_quote(StockLatestQuoteRequest(symbol_or_symbols=symbol))
     quote = q[symbol]

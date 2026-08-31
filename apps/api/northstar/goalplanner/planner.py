@@ -36,9 +36,13 @@ RISK_POLICIES: dict[str, dict[str, Any]] = {
     },
     "aggressive": {
         "weights": {"wheel": 0.40, "momentum_rotation": 0.50, "cash": 0.10},
+        # max_order_notional_pct must scale with the sleeve: a 50% momentum
+        # sleeve rebalances in ~16.7% clips (top-3), which the default 10%
+        # fat-finger cap would reject order by order.
         "guardrails": Guardrails(
             max_loss_per_trade_pct=0.02, breaker_soft_dd=-0.10, breaker_hard_dd=-0.15,
             single_name_concentration=0.25, csp_collateral_cap=0.30,
+            max_order_notional_pct=0.20,
         ),
     },
 }

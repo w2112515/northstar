@@ -31,7 +31,7 @@ from northstar.domain import (
     StrategyInstance,
     TradeProposal,
 )
-from northstar.executor import execute_order_plan
+from northstar.executor import execute_order_plan, sweep_stale_orders
 from northstar.exits import plan_exits
 from northstar.gate import GateSnapshot, run_gate
 from northstar.journal import get_store
@@ -429,8 +429,19 @@ def gate_and_execute(
             result = execute_order_plan(order, market_open=market_open, wait_seconds=execute_wait)
             summary[bucket].append(result)
             if inst is not None and inst.family in ("momentum_rotation", "dsl_rotation"):
-                store.save("instance_state", inst.id,
-                           {"last_rebalance": datetime.now(timezone.utc).isoformat()})
+                # Start the rebalance clock only once a BUY fills. Sells,
+                # canceled submissions and queued orders must not consume it:
+                # a sell-only or partially-filled rotation has to keep retrying
+                # next pass, or the sleeve strands in cash for rebalance_days.
+                # The clock's one job is damping rank-flap churn, and churn
+                # only becomes possible after a buy fills.
+                filled_buy = any(
+                    e.get("status") == "filled" and (e.get("leg") or {}).get("side") == "buy"
+                    for e in (result.get("legs") or [])
+                )
+                if filled_buy:
+                    store.save("instance_state", inst.id,
+                               {"last_rebalance": datetime.now(timezone.utc).isoformat()})
     elif verdict.verdict == "needs_human":
         # One live card per question. While a needs_human condition persists
         # (weather storm, soft breaker, cooldown), strategies re-propose the
@@ -556,6 +567,9 @@ def _run_once_locked(dry_run: bool, execute_wait: int) -> dict[str, Any]:
     weather = get_weather(store)  # cache hit - fetched during snapshot build
     if weather:
         summary["weather"] = {"score": weather.get("score"), "bucket": weather.get("bucket")}
+
+    if not dry_run:
+        sweep_stale_orders()
 
     # exits first: risk-reducing orders free capital before new entries
     for proposal, order in collect_exits(store, ctx, guardrails):
