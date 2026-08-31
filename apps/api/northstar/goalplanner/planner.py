@@ -17,7 +17,7 @@ import pandas as pd
 
 from northstar.backtest import momentum_backtest, monte_carlo_goal, wheel_income_approx
 from northstar.broker import daily_bars
-from northstar.domain import Feasibility, Goal, Guardrails, Plan, PlanAllocation
+from northstar.domain import Alternative, Feasibility, Goal, Guardrails, Plan, PlanAllocation
 
 RISK_POLICIES: dict[str, dict[str, Any]] = {
     "conservative": {
@@ -118,21 +118,26 @@ def plan_goal(goal: Goal) -> tuple[Plan, dict[str, Any]]:
     else:
         feasibility = "green"
 
-    # honest alternatives for red/yellow goals
-    alternatives: list[str] = []
+    # honest alternatives for red/yellow goals - each carries the concrete
+    # field changes so the UI can offer a one-tap "use these numbers"
+    alternatives: list[Alternative] = []
     if feasibility != "green" and mc.get("probability") is not None:
         # target achievable at ~60% confidence = 40th percentile of simulated finals
         achievable = mc.get("p40_final")
         if achievable and achievable > capital:
-            alternatives.append(
-                f"Keep everything else, aim for ${achievable:,.0f} instead - that has about a 60% shot."
-            )
+            alternatives.append(Alternative(
+                text=f"Keep everything else, aim for ${achievable:,.0f} instead - that has about a 60% shot.",
+                changes={"target_amount": float(round(achievable))},
+            ))
         longer = _achievable_horizon(port, capital, target, months)
         if longer:
-            alternatives.append(
-                f"Keep the ${target:,.0f} target but give it {longer} months - probability rises above 55%."
-            )
-        alternatives.append("Add capital or lower the monthly income ask - smaller required return, higher odds.")
+            alternatives.append(Alternative(
+                text=f"Keep the ${target:,.0f} target but give it {longer} months - probability rises above 55%.",
+                changes={"horizon_months": float(longer)},
+            ))
+        alternatives.append(Alternative(
+            text="Add capital or lower the monthly income ask - smaller required return, higher odds.",
+        ))
 
     # baseline: same capital, SPY buy-and-hold, same horizon
     d = _distributions()

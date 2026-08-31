@@ -1,12 +1,14 @@
-"""Defined-risk credit spreads: bull put, bear call, iron condor.
+"""Defined-risk vertical spreads: bull put, bear call, iron condor, bull call.
 
-One program serves all three families - the instance's strategy_type picks the
+One program serves all four families - the instance's strategy_type picks the
 shape, a simple daily-bar regime filter decides IF we propose today:
 
   bull_put_spread   close > SMA(trend)                    (up/sideways market)
   bear_call_spread  close < SMA(trend)                    (down/sideways market)
   iron_condor       |close/SMA - 1| < range_band AND      (quiet, range-bound)
                     short-window realized vol < long-window
+  bull_call_spread  close > SMA(trend) by min_trend       (clear uptrend; the
+                    one net-DEBIT shape: pay a capped cost for capped upside)
 
 Strike/width/credit selection lives in the compiler; max loss is enforced by
 the gate (defined-risk cap). Wing width is quoted as a % of spot and passed in
@@ -19,7 +21,7 @@ from northstar.domain import StrategyInstance, TradeProposal
 from northstar.indicators import realized_vol, sma
 from northstar.strategies.base import EngineContext, effective_underlyings
 
-SPREAD_TYPES = ("bull_put_spread", "bear_call_spread", "iron_condor")
+SPREAD_TYPES = ("bull_put_spread", "bear_call_spread", "iron_condor", "bull_call_spread")
 
 
 def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> list[TradeProposal]:
@@ -31,6 +33,11 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
     if not underlyings:
         return []
     per_name_budget = ctx.allocation_equity(weight) / len(underlyings)
+    # per-trade $ risk the compiler may size up to (contracts = budget // per-
+    # contract max loss). Bounded by the plan's per-trade cap AND this name's
+    # sleeve share; the gate re-checks the same cap on the compiled order.
+    g = ctx.plan.guardrails if ctx.plan else None
+    per_trade_cap = ctx.equity() * (g.max_loss_per_trade_pct if g else 0.01)
     trend_days = int(p.get("trend_sma", 50))
     width_pct = float(p.get("width_pct", 0.05))
     proposals: list[TradeProposal] = []
@@ -54,6 +61,20 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
         if direction is None:
             continue
 
+        params = {
+            "target_delta": float(p.get("target_delta", 0.20 if stype == "iron_condor" else 0.25)),
+            "width": width,
+            "dte_min": int(p.get("dte_min", 21)),
+            "dte_max": int(p.get("dte_max", 45)),
+            "min_credit_ratio": float(p.get("min_credit_ratio", 0.15)),
+            "risk_budget": round(min(per_trade_cap, per_name_budget), 2),
+        }
+        invalidation = "price breaks through the short strike - loss stays capped at the wing"
+        if stype == "bull_call_spread":
+            params["long_delta"] = float(p.get("long_delta", 0.55))
+            params["max_debit_ratio"] = float(p.get("max_debit_ratio", 0.60))
+            invalidation = "the rise stalls below the long strike - loss stays capped at the debit paid"
+
         proposals.append(
             TradeProposal(
                 source=f"strategy:{instance.id}",
@@ -62,16 +83,8 @@ def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> li
                 strategy_type=stype,
                 horizon_days=int(p.get("dte_max", 45)),
                 thesis_human=thesis,
-                invalidation=(
-                    "price breaks through the short strike - loss stays capped at the wing"
-                ),
-                params={
-                    "target_delta": float(p.get("target_delta", 0.20 if stype == "iron_condor" else 0.25)),
-                    "width": width,
-                    "dte_min": int(p.get("dte_min", 21)),
-                    "dte_max": int(p.get("dte_max", 45)),
-                    "min_credit_ratio": float(p.get("min_credit_ratio", 0.15)),
-                },
+                invalidation=invalidation,
+                params=params,
             )
         )
     return proposals
@@ -95,6 +108,15 @@ def _regime_call(stype, und, spot, trend, closes, p):
         return "neutral_bearish", (
             f"{und} trades {rel:+.1%} below its {trend_days}-day average - selling a call spread "
             f"above the market: we win if the bounce stays modest."
+        )
+    if stype == "bull_call_spread":
+        # the one debit shape: needs a CLEAR uptrend, not just any close above trend
+        min_trend = float(p.get("min_trend", 0.02))
+        if rel < min_trend:
+            return None, ""
+        return "bullish", (
+            f"{und} trades {rel:+.1%} above its {trend_days}-day average - buying a call spread: "
+            f"a capped-cost bet that the climb continues."
         )
     # iron condor: quiet + range-bound
     band = float(p.get("range_band", 0.03))

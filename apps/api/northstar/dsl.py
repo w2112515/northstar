@@ -332,7 +332,7 @@ def run_shipyard_round(store=None, n: int = 3) -> dict[str, Any]:
         if fit is not None:
             report.goal_fit, report.goal_fit_note = fit, fit_note
 
-        # floor: beat the DSL champion if one sails, else clear the absolute bar
+        # floor: beat the DSL champion if one is live, else clear the absolute bar
         bar = champ_adj if champ_adj is not None else ABS_SHARPE_FLOOR
         promote = adj is not None and adj > bar + 0.05
         if promote and champ_fit is not None and fit is not None:

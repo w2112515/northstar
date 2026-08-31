@@ -16,6 +16,7 @@ from northstar.domain import JournalEvent
 
 _BARS_TTL_S = 600
 _bars_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_quotes_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 _SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.]{0,9}$")
 
@@ -48,6 +49,40 @@ def bars_rows(symbol: str, days: int = 130) -> list[dict[str, Any]]:
             })
     _bars_cache[key] = (time.monotonic(), rows)
     return rows
+
+
+def quotes_rows(symbols: list[str]) -> dict[str, Any]:
+    """Last close + day change for a basket of symbols, one batched data
+    call, cached for 10 minutes. Feeds the watchlist rail - read-only."""
+    syms = sorted({s.upper().strip() for s in symbols if valid_symbol(s.upper().strip())})[:24]
+    if not syms:
+        return {}
+    key = ",".join(syms)
+    hit = _quotes_cache.get(key)
+    if hit and time.monotonic() - hit[0] < _BARS_TTL_S:
+        return hit[1]
+
+    from northstar.broker import daily_bars
+
+    dfs = daily_bars(syms, years=0.1)
+    out: dict[str, Any] = {}
+    for s in syms:
+        df = dfs.get(s)
+        if df is None or len(df) == 0:
+            continue
+        tail = df.tail(2)
+        closes = [float(r["close"]) for _, r in tail.iterrows()]
+        last = closes[-1]
+        prev = closes[0] if len(closes) > 1 else None
+        ts = tail.index[-1]
+        out[s] = {
+            "last": round(last, 4),
+            "prev_close": round(prev, 4) if prev is not None else None,
+            "chg": round(last / prev - 1, 6) if prev else None,
+            "t": str(getattr(ts, "date", lambda: ts)()),
+        }
+    _quotes_cache[key] = (time.monotonic(), out)
+    return out
 
 
 def _fill_side(human: str) -> str:

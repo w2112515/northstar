@@ -94,6 +94,8 @@ export function Pipeline({
           <span
             key={s.id}
             title={satNotes[s.id] ?? undefined}
+            // title alone is hover-only; expose the live note to AT too
+            aria-label={satNotes[s.id] ? `${s.label}: ${satNotes[s.id]}` : undefined}
             className={cn(
               "rounded-sm bg-panel px-1.5 py-0.5 text-micro text-mist",
               satNotes[s.id] && (s.kind === "ai" ? "text-gold shadow-tone-gold" : "text-signal shadow-tone-signal"),

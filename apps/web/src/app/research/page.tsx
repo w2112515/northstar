@@ -29,10 +29,12 @@ const TABS = [
   { id: "mining", label: "Mining" },
 ];
 
+// amber is reserved for "waiting on a human" - a stressed market is not
+// waiting for anyone, so mid states read neutral and down states read coral.
 const REGIME_TONE: Record<string, "teal" | "amber" | "coral" | "mist"> = {
   up_calm: "teal",
-  up_stressed: "amber",
-  flat_choppy: "amber",
+  up_stressed: "mist",
+  flat_choppy: "mist",
   down_calm: "coral",
   down_stressed: "coral",
   unknown: "mist",
@@ -109,9 +111,9 @@ function RadarTab({
         )}
       </Panel>
       <div className="flex flex-col gap-3">
-        {optionsWatch && optionsWatch.ranked.length > 0 && (
-          <Panel className="p-4">
-            <div className="kicker">Options watch · best delta-band put yield</div>
+        <Panel className="p-4">
+          <div className="kicker">Options watch · best delta-band put yield</div>
+          {optionsWatch && optionsWatch.ranked.length > 0 ? (
             <ul className="mt-3 space-y-3">
               {optionsWatch.ranked.slice(0, 4).map((r) => (
                 <li key={r.symbol}>
@@ -120,13 +122,17 @@ function RadarTab({
                     <span className="num text-xs text-teal">{(r.ann_yield * 100).toFixed(0)}%/yr</span>
                   </div>
                   <div className="text-2xs text-mist">
-                    ${r.strike} strike · {r.dte} DTE · bid ${r.bid} · Δ{r.delta}
+                    ${r.strike} strike · {r.dte} DTE (days to expiry) · bid ${r.bid} · Δ{r.delta}
                   </div>
                 </li>
               ))}
             </ul>
-          </Panel>
-        )}
+          ) : (
+            <p className="mt-2 text-sm text-mist">
+              No options scan yet - the next scout pass fills this in.
+            </p>
+          )}
+        </Panel>
         <Panel className="p-4">
           <div className="flex items-center gap-2">
             <span className="kicker">Daily brief</span>
@@ -242,8 +248,15 @@ function CompassTab({
             {compass.hypothesis && (
               <div className="mt-4">
                 <button type="button" className="text-left" onClick={() => setShowFullHypothesis((v) => !v)}>
-                  <div className="kicker">
-                    AI hypothesis · {compass.hypothesis_source === "gemini" ? "gemini" : "auto"}
+                  <div className="flex items-center gap-2">
+                    <span className="kicker">
+                      {compass.hypothesis_source === "gemini"
+                        ? "AI hypothesis · gemini"
+                        : "Hypothesis · rule-based"}
+                    </span>
+                    {/* the mandatory gold AI badge; rule-based text is not AI
+                        and must not be attributed to it */}
+                    {compass.hypothesis_source === "gemini" && <Badge tone="gold">AI</Badge>}
                   </div>
                   <p className={`mt-1 text-sm text-ink ${showFullHypothesis ? "" : "line-clamp-2"}`}>
                     {compass.hypothesis}
@@ -256,7 +269,7 @@ function CompassTab({
               <div className="mt-4 space-y-2">
                 <div className="kicker">Family performance in this regime (walk-forward)</div>
                 {bucketRows.map(({ fam, stats }) => (
-                  <div key={fam} className="flex items-baseline justify-between rounded-md bg-panel px-3 py-2">
+                  <div key={fam} className="panel-inset flex items-baseline justify-between px-3 py-2">
                     <div className="text-sm text-ink">{fam.replace(/_/g, " ")}</div>
                     {stats!.refused ? (
                       <span className="text-2xs text-mist">not enough history</span>
@@ -336,7 +349,10 @@ function CompassTab({
         </Panel>
 
         <Panel className="p-4">
-          <div className="kicker">TimesFM 5-day fan</div>
+          <div className="flex items-center gap-2">
+            <span className="kicker">TimesFM 5-day fan</span>
+            <Badge tone="gold">AI</Badge>
+          </div>
           <div className="mt-2">
             <ForecastFan doc={forecast} available={forecastAvailable} busy={busy === "forecast"} onRefresh={onForecast} />
           </div>
@@ -418,7 +434,7 @@ function Workbench() {
       <Tabs tabs={TABS} active={tab} onChange={(id) => router.replace(id === "radar" ? "/research" : `/research?tab=${id}`, { scroll: false })} dot={dots} />
 
       {err && (
-        <div className="rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+        <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           {err}
         </div>
       )}

@@ -4,7 +4,7 @@ The instance's params carry a validated StrategySpec (params["spec"]). This
 program executes it exactly the way the backtest defined it: composite factor
 rank over the spec universe, hold top-N equal weight, optional SPY-trend cash
 brake. Mechanics (sizing, sells-then-buys, sleeve budget) mirror momentum.py,
-so a promoted spec sails under all the same discipline - and every proposal
+so a promoted spec runs under all the same discipline - and every proposal
 still faces the 17-rule gate.
 """
 
@@ -41,7 +41,7 @@ def risk_on(bars: dict, spec: dict) -> bool:
 def propose(instance: StrategyInstance, weight: float, ctx: EngineContext) -> list[TradeProposal]:
     spec, errors = validate_spec(instance.params.get("spec") or {})
     if errors or spec is None:
-        return []  # malformed spec sails nowhere; the journal recorded its birth
+        return []  # malformed spec trades nowhere; the journal recorded its birth
 
     universe = spec["universe"]
     held = {

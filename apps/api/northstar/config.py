@@ -7,20 +7,49 @@ from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
 
-# apps/api/northstar/config.py -> repo root is parents[3]
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# apps/api/northstar/config.py -> repo root is parents[3]. The deploy container
+# has no repo checkout (package sits at /app/northstar): fall back to the
+# package's parent - env comes from the platform there, and data/ only matters
+# for the local store.
+_here = Path(__file__).resolve()
+REPO_ROOT = _here.parents[3] if len(_here.parents) > 3 else _here.parents[1]
 _ENV_FILE = REPO_ROOT / ".env"
 # .env is the local source of truth; override any empty inherited env vars.
 load_dotenv(_ENV_FILE, override=True)
 _FILE_ENV = dotenv_values(_ENV_FILE)
 
 
+def _cred(name: str) -> str | None:
+    """systemd LoadCredential support: secrets arrive as files in
+    $CREDENTIALS_DIRECTORY, named like the lowercased env var. Highest
+    priority - a box using credentials has deliberately removed the value
+    from .env, so nothing else should shadow it."""
+    cred_dir = os.getenv("CREDENTIALS_DIRECTORY", "")
+    if not cred_dir:
+        return None
+    try:
+        val = (Path(cred_dir) / name.lower()).read_text(encoding="utf-8").strip()
+        return val or None
+    except OSError:
+        return None
+
+
 def _env(name: str, default: str = "") -> str:
-    """Prefer .env file over inherited process env (empty GOOGLE_API_KEY often leaks in)."""
+    """Secret resolution order: systemd credential file > .env file > process
+    env (empty GOOGLE_API_KEY often leaks in via inherited env)."""
+    cred = _cred(name)
+    if cred is not None:
+        return cred
     file_val = _FILE_ENV.get(name)
     if file_val is not None and str(file_val).strip() != "":
         return str(file_val).strip()
     return os.getenv(name, default).strip()
+
+
+def secret_env(name: str, default: str = "") -> str:
+    """Public helper for modules that read secrets outside Settings
+    (e.g. the API's admin token)."""
+    return _env(name, default)
 
 
 @dataclass(frozen=True)

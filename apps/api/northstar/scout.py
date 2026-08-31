@@ -1,6 +1,6 @@
 """Scout: the full-market opportunity radar.
 
-The fleet used to look at a fixed 10-name chart. The scout widens that to the
+The desk used to look at a fixed 10-name chart. The scout widens that to the
 whole tradable market: every night (and on demand) it pulls Alpaca's screener
 boards (most active + biggest movers), applies a liquidity floor, scores the
 survivors with deterministic factor math, and publishes a Top-K report with a
@@ -8,7 +8,7 @@ one-line reason per pick. Strategies merge the report into their universes;
 the analyst debates its loudest names.
 
 Honesty contract: the scout never places orders and never talks to an LLM.
-It only decides where the fleet LOOKS. Every pick carries its score parts, so
+It only decides where the desk LOOKS. Every pick carries its score parts, so
 "why did we buy XYZ?" always traces back to a dated scout report.
 """
 

@@ -84,6 +84,43 @@ def mining_decide(body: MiningDecision) -> dict:
     return decide_mining(get_store(), body.candidate_id, body.approve)
 
 
+@router.get("/slippage")
+def slippage(family: str = "momentum_rotation", force: bool = False) -> dict:
+    """Walk-forward slippage sensitivity (mid / 25% / 50% spread cross) for the
+    family's champion params. Heavy (3 backtests on 4y bars) - cached per UTC day."""
+    from datetime import datetime, timezone
+
+    from northstar.backtest import slippage_sensitivity
+    from northstar.broker import daily_bars
+    from northstar.scout import CORE_UNIVERSE
+
+    store = get_store()
+    key = f"slippage_{family}"
+    today = datetime.now(timezone.utc).date().isoformat()
+    cached = store.get("lab_reports", key)
+    if cached and not force and str(cached.get("ts", "")).startswith(today):
+        return {**cached, "cached": True}
+
+    champion = next(
+        (d for d in store.list("instances")
+         if d.get("family") == family and d.get("status") == "champion"),
+        None,
+    )
+    params = (champion or {}).get("params") or {}
+    universe = params.get("universe") or CORE_UNIVERSE
+    bars = daily_bars(sorted(set(universe)), years=4.0)
+    if not bars:
+        return {"ok": False, "error": "no bars available for the universe"}
+    report = {
+        "ok": True,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "params_source": "champion" if champion else "defaults",
+        **slippage_sensitivity(bars, params, family=family),
+    }
+    store.save("lab_reports", key, report)
+    return {**report, "cached": False}
+
+
 @router.get("/weather-validation")
 def weather_validation(force: bool = False) -> dict:
     """Walk-forward study of the weather floor (vol proxy - honestly labeled).

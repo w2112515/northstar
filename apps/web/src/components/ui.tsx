@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 /* UI primitives in the Grok-prototype visual language (the approved visual
  *  authority). Panels carry content; badges carry tone; kickers label
@@ -78,6 +78,7 @@ export function Badge({
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium tracking-wide",
+        "transition-[color,background-color] duration-150",
         BADGE_TONES[tone],
         className,
       )}
@@ -96,6 +97,12 @@ export function eventTone(e: { kind: string; payload?: Record<string, unknown> }
     if (p.verdict === "approved") return "teal";
     return "amber";
   }
+  // A loss day must never wear the profit color.
+  if (e.kind === "pnl" && typeof p.realized === "number") {
+    return p.realized >= 0 ? "teal" : "coral";
+  }
+  // gold is reserved for star moments + AI attribution (the AI badge itself);
+  // event-kind chips are categories, not celebrations.
   const map: Record<string, BadgeTone> = {
     fill: "teal",
     pnl: "teal",
@@ -104,8 +111,8 @@ export function eventTone(e: { kind: string; payload?: Record<string, unknown> }
     scout: "signal",
     proposal: "amber",
     approval: "amber",
-    debate: "gold",
-    digest: "gold",
+    debate: "mist",
+    digest: "mist",
     experiment: "mist",
     trace: "mist",
     system: "mist",
@@ -121,7 +128,8 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   gold: "bg-gold text-void hover:bg-gold/90 shadow-tone-gold",
   teal: "bg-teal text-void hover:bg-teal/90",
   coral: "bg-coral text-void hover:bg-coral/90",
-  signal: "bg-signal text-ink hover:bg-signal/90",
+  // void on signal = 5.79:1; ink on signal was 2.77:1 (below AA for UI text)
+  signal: "bg-signal text-void hover:bg-signal/90",
   ghost: "bg-transparent text-ink hover:bg-panel shadow-border",
   quiet: "bg-panel text-ink hover:bg-panel/80 shadow-border",
   danger: "bg-coral-dim text-coral hover:bg-coral/20 shadow-tone-coral",
@@ -135,6 +143,7 @@ export function Button({
   disabled,
   type = "button",
   className = "",
+  title,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -143,12 +152,14 @@ export function Button({
   disabled?: boolean;
   type?: "button" | "submit";
   className?: string;
+  title?: string;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={cn(
         "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap font-medium transition-[color,background-color,box-shadow,transform,opacity] duration-150 ease-out",
         "rounded-md text-sm active:not-disabled:scale-[0.96] disabled:pointer-events-none disabled:opacity-40",
@@ -173,7 +184,7 @@ export function Input({
     <input
       aria-label={label ?? props.placeholder}
       className={cn(
-        "h-10 w-full rounded-md bg-void px-3 text-sm text-ink shadow-border placeholder:text-mist/60",
+        "h-10 w-full rounded-md bg-void px-3 text-sm text-ink shadow-border placeholder:text-mist/75",
         className,
       )}
       {...props}
@@ -219,6 +230,11 @@ export function Switch({
 
 // ---------------------------------------------------------------------- Tabs
 
+/** View switcher styled after the prototype (13px sentence case, active
+ *  pill). Honest semantics: these are toggle buttons, not ARIA tabs - the
+ *  full tab pattern (roving tabindex, arrow keys, tabpanel wiring) was never
+ *  implemented, and half an ARIA contract misleads screen readers more than
+ *  none. */
 export function Tabs({
   tabs,
   active,
@@ -232,24 +248,23 @@ export function Tabs({
   dot?: Record<string, boolean>;
 }) {
   return (
-    <div role="tablist" className="flex gap-0.5 overflow-x-auto rounded-md bg-void p-0.5 shadow-border">
+    <div className="flex gap-0.5 overflow-x-auto rounded-md bg-void p-0.5 shadow-border">
       {tabs.map((t) => (
         <button
           key={t.id}
-          role="tab"
-          aria-selected={active === t.id}
+          aria-pressed={active === t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            "relative h-9 shrink-0 rounded-sm px-3 text-2xs uppercase tracking-[0.12em] transition-[color,background-color] duration-150",
+            "relative h-9 shrink-0 rounded-sm px-3.5 text-[13px] transition-[color,background-color] duration-150",
             active === t.id ? "bg-panel text-ink" : "text-mist hover:text-ink",
           )}
         >
           {t.label}
           {dot?.[t.id] && (
-            <span
-              className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber"
-              title="Waiting on your decision"
-            />
+            <>
+              <span aria-hidden className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber" />
+              <span className="sr-only">- a decision is waiting here</span>
+            </>
           )}
         </button>
       ))}
@@ -289,6 +304,42 @@ export function EmptyState({
       {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
     </div>
   );
+}
+
+// --------------------------------------------------------------- number tween
+
+/** Tween a number toward its live value (ease-out, ~350ms) so KPI and hero
+ *  figures glide instead of snapping on every poll. Interruptions retween
+ *  from the currently displayed value; prefers-reduced-motion snaps. */
+export function useTweenNumber(value: number, ms = 350): number {
+  const [display, setDisplay] = useState(value);
+  const displayRef = useRef(value);
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    const from = displayRef.current;
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (!Number.isFinite(value) || !Number.isFinite(from) || reduce || from === value) {
+      displayRef.current = value;
+      setDisplay(value);
+      return;
+    }
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      const eased = 1 - Math.pow(1 - k, 3);
+      const v = from + (value - from) * eased;
+      displayRef.current = v;
+      setDisplay(v);
+      if (k < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, ms]);
+
+  return display;
 }
 
 // ---------------------------------------------------------------------- Stat
@@ -351,6 +402,8 @@ export function PaperBadge({ className = "" }: { className?: string }) {
       )}
     >
       PAPER
+      {/* title tooltips are invisible to keyboards and touch */}
+      <span className="sr-only">- practice money, no account is real</span>
     </span>
   );
 }

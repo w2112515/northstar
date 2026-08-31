@@ -1,17 +1,20 @@
 """Journal & document store.
 
 Append-only journal (lineage) + small document collections (goals, plans,
-strategy instances, experiments, pending approvals, positions state).
+strategy instances, experiments, pending approvals, positions state) + a
+driver lease (single-writer election for the trading scheduler).
 
 Two implementations behind one interface:
-- LocalJsonStore: data/journal.jsonl + data/db.json (default, dev)
+- LocalJsonStore: data/<role>/journal.jsonl + db.json + driver.lock (default)
 - FirestoreStore: enabled via JOURNAL_STORE=firestore (see firestore_store.py)
 """
 
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Protocol
@@ -27,6 +30,10 @@ class Store(Protocol):
     def get(self, collection: str, doc_id: str) -> dict[str, Any] | None: ...
     def list(self, collection: str) -> list[dict[str, Any]]: ...
     def delete(self, collection: str, doc_id: str) -> None: ...
+    # single-writer election: acquire also renews when `holder` already owns it
+    def acquire_lease(self, name: str, holder: str, ttl_seconds: int) -> bool: ...
+    def release_lease(self, name: str, holder: str) -> None: ...
+    def lease_holder(self, name: str) -> str | None: ...
 
 
 class LocalJsonStore:
@@ -93,6 +100,53 @@ class LocalJsonStore:
             db = self._read_db()
             db.get(collection, {}).pop(doc_id, None)
             self._write_db(db)
+
+    # ---- driver lease (cross-process: O_EXCL lock files, stale by mtime+ttl)
+    def _lease_path(self, name: str) -> Path:
+        return self._dir / f"{name}.lock"
+
+    def acquire_lease(self, name: str, holder: str, ttl_seconds: int) -> bool:
+        path = self._lease_path(name)
+        with self._lock:
+            try:
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump({"holder": holder, "ts": time.time()}, f)
+                return True
+            except FileExistsError:
+                pass
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                doc = {}
+            expired = time.time() - float(doc.get("ts", 0)) > ttl_seconds
+            if doc.get("holder") == holder or expired:
+                # renew, or take over a dead holder's lock. Not perfectly atomic
+                # across processes, but colliding here requires two drivers on
+                # one data_dir racing within the same tick - an ops error the
+                # lease exists to surface, and the window is milliseconds.
+                path.write_text(json.dumps({"holder": holder, "ts": time.time()}), encoding="utf-8")
+                return True
+            return False
+
+    def release_lease(self, name: str, holder: str) -> None:
+        path = self._lease_path(name)
+        with self._lock:
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+                if doc.get("holder") == holder:
+                    path.unlink(missing_ok=True)
+            except FileNotFoundError:
+                pass
+            except Exception:
+                pass
+
+    def lease_holder(self, name: str) -> str | None:
+        try:
+            doc = json.loads(self._lease_path(name).read_text(encoding="utf-8"))
+            return str(doc.get("holder")) if doc.get("holder") else None
+        except Exception:
+            return None
 
 
 @lru_cache(maxsize=1)

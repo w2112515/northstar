@@ -111,6 +111,16 @@ def sparkline(equity: pd.Series, width: int = 60) -> str:
     return "".join(SPARK_CHARS[s] for s in steps)
 
 
+def slippage_tables(store) -> list[dict[str, Any]]:
+    """Cached lab slippage-sensitivity reports (see /api/lab/slippage), one per
+    family. Read-only here: the tearsheet renders whatever the lab computed."""
+    out = []
+    for doc in store.list("lab_reports"):
+        if doc.get("family") and doc.get("rows"):
+            out.append(doc)
+    return sorted(out, key=lambda d: d.get("family", ""))
+
+
 def build_report(store) -> dict[str, Any]:
     equity, source = fetch_daily_equity()
     return {
@@ -119,6 +129,7 @@ def build_report(store) -> dict[str, Any]:
         "stats": equity_stats(equity) if equity is not None else None,
         "spark": sparkline(equity) if equity is not None else None,
         "attribution": pnl_attribution(store),
+        "slippage": slippage_tables(store),
     }
 
 
@@ -177,6 +188,32 @@ def render_markdown(report: dict[str, Any]) -> str:
     else:
         lines.append("> No closed round-trips yet - realized P&L appears once positions close.")
 
+    slippage = report.get("slippage") or []
+    if slippage:
+        lines += ["", "## Slippage sensitivity (walk-forward, out-of-sample)", ""]
+        lines += [
+            "Same backtest under three fill assumptions - an edge that only survives",
+            "mid-price fills is a liquidity subsidy, not a strategy.",
+            "",
+        ]
+        for tbl in slippage:
+            lines.append(f"**{tbl['family']}** ({tbl.get('params_source', 'defaults')} params)")
+            lines.append("")
+            lines.append("| Fill assumption | Cost (bps) | OOS ann. return | OOS Sharpe | OOS max DD |")
+            lines.append("| --- | ---: | ---: | ---: | ---: |")
+            for row in tbl["rows"]:
+                oos = row["oos"]
+                lines.append(
+                    f"| {row['assumption'].replace('_', ' ')} | {row['cost_bps']:g} | "
+                    f"{fmt_or_dash(oos.get('ann_return'), '{:+.1%}')} | "
+                    f"{fmt_or_dash(oos.get('sharpe'), '{:.2f}')} | "
+                    f"{fmt_or_dash(oos.get('max_dd'), '{:.1%}')} |"
+                )
+            if tbl.get("fragile"):
+                lines.append("")
+                lines.append("> **Fragile:** the OOS edge disappears at half-spread fills.")
+            lines.append("")
+
     lines += [
         "",
         "## Method notes",
@@ -202,7 +239,7 @@ def fmt_or_dash(v, fmt: str) -> str:
 #
 # The tearsheet above is the long-form story; this is the one-pager the night
 # watch files every run: equity, today's P&L and fills, the compass regime,
-# scout highlights and the captain's narrative, as ready-to-share markdown.
+# scout highlights and the day-log narrative, as ready-to-share markdown.
 
 def _today_events(store, kinds: list[str], limit: int = 500) -> list[Any]:
     today = datetime.now(timezone.utc).date().isoformat()
@@ -215,7 +252,7 @@ def build_daily_report(store, nightly_results: dict[str, Any] | None = None) -> 
     lines = [
         f"# NorthStar daily report - {now.date().isoformat()}",
         "",
-        "Autonomous paper-trading fleet on Alpaca. Nothing here is investment advice;",
+        "Autonomous paper-trading desk on Alpaca. Nothing here is investment advice;",
         "every order passed the hard risk gate, every number traces to a journal event.",
         "",
     ]
@@ -280,7 +317,7 @@ def build_daily_report(store, nightly_results: dict[str, Any] | None = None) -> 
             lines.append(f"- Options watch (delta-band CSP yield): {tops}")
         lines.append("")
 
-    # captain ---------------------------------------------------------------
+    # day log (payload key: captain) ----------------------------------------
     captain = (nightly_results or {}).get("captain")
     if not isinstance(captain, dict) or not captain.get("narrative"):
         for ev in store.events(kinds=["digest"], limit=5):
@@ -289,7 +326,7 @@ def build_daily_report(store, nightly_results: dict[str, Any] | None = None) -> 
                 captain = cap
                 break
     if isinstance(captain, dict) and captain.get("narrative"):
-        lines += ["## Captain's log", "", f"> {captain['narrative']}", ""]
+        lines += ["## Day log", "", f"> {captain['narrative']}", ""]
 
     # forecast skill ---------------------------------------------------------
     skill = store.get("state", "forecast_skill") or {}

@@ -1,0 +1,19 @@
+[Unit]
+Description=NorthStar read-only cockpit (competition account, public view)
+After=northstar.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/northstar/apps/web
+# Deliberately NO NORTHSTAR_ADMIN_TOKEN: the web proxy only injects the write
+# key when that env exists, so this instance is view-only by construction -
+# every mutation gets a 401 from the API. Judges can watch, nobody can drive.
+Environment=API_BASE=http://127.0.0.1:8800
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npx next start -H 0.0.0.0 -p 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

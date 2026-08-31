@@ -1,0 +1,5 @@
+# keeps local-only files out of the Cloud Build staging bucket entirely
+node_modules
+.next
+.env.local
+.env*.local

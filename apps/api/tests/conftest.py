@@ -15,10 +15,29 @@ os.environ.setdefault("NORTHSTAR_FACTORS_DISABLED", "1")
 os.environ.setdefault("NORTHSTAR_SHIPYARD_DISABLED", "1")
 os.environ.setdefault("NORTHSTAR_MINING_DISABLED", "1")
 
-# Captain's log narrative falls back to the deterministic template in tests.
+# Day-log narrative falls back to the deterministic template in tests.
 os.environ.setdefault("NORTHSTAR_CAPTAIN_LLM_DISABLED", "1")
+
+# Nightly lessons distillation stays off unless a test enables it explicitly.
+os.environ.setdefault("NORTHSTAR_LESSONS_DISABLED", "1")
 
 # Compass/advisor steps hit live bars + LLM; unit tests call the pure pieces.
 os.environ.setdefault("NORTHSTAR_COMPASS_DISABLED", "1")
 os.environ.setdefault("NORTHSTAR_COMPASS_LLM_DISABLED", "1")
 os.environ.setdefault("NORTHSTAR_ADVISOR_DISABLED", "1")
+
+import pytest  # noqa: E402
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--live-llm",
+        action="store_true",
+        default=False,
+        help="run the tests/evals cases tagged live_accept against the real Gemini chain",
+    )
+
+
+@pytest.fixture
+def live_llm(request) -> bool:
+    return bool(request.config.getoption("--live-llm"))

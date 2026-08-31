@@ -10,7 +10,8 @@ Structures are recognized from live positions, grouped by (underlying, expiry):
 - one short option alone            -> single-leg buy-to-close
 - 1 short + 1 long, same type       -> vertical, closed as one mleg order
 - 2 shorts + 2 longs (put+call side)-> iron condor, closed as one 4-leg mleg
-- anything else                     -> close each short leg individually
+- anything else with short legs     -> close each short leg individually
+  (long-only leftovers are paid-for assets: nothing further to lose)
 
 plan_exits() is pure (positions in, orders out). Prices come from the
 position marks Alpaca already returns - no extra market-data calls.
@@ -42,6 +43,10 @@ def occ_type(symbol: str) -> str:
     return symbol[-9]  # "P" | "C"
 
 
+def occ_strike(symbol: str) -> float:
+    return int(symbol[-8:]) / 1000.0
+
+
 def dte(symbol: str, today: date | None = None) -> int:
     return (occ_expiry(symbol) - (today or datetime.now(timezone.utc).date())).days
 
@@ -67,13 +72,21 @@ def _classify(legs: list[dict[str, Any]]) -> tuple[str, StrategyType] | None:
         return ("single", "cash_secured_put" if kind == "P" else "covered_call")
     if len(shorts) == 1 and len(longs) == 1 and occ_type(shorts[0]["symbol"]) == occ_type(longs[0]["symbol"]):
         kind = occ_type(shorts[0]["symbol"])
-        return ("vertical", "bull_put_spread" if kind == "P" else "bear_call_spread")
+        if kind == "P":
+            return ("vertical", "bull_put_spread")
+        # call vertical: LONG the lower strike = debit (bull call); credit otherwise
+        if occ_strike(longs[0]["symbol"]) < occ_strike(shorts[0]["symbol"]):
+            return ("vertical", "bull_call_spread")
+        return ("vertical", "bear_call_spread")
     if len(shorts) == 2 and len(longs) == 2:
         stypes = sorted(occ_type(l["symbol"]) for l in shorts)
         ltypes = sorted(occ_type(l["symbol"]) for l in longs)
         if stypes == ["C", "P"] and ltypes == ["C", "P"]:
             return ("condor", "iron_condor")
-    if shorts and not longs:
+    # fallback for anything else with short legs (stacked same-type verticals,
+    # partial fills, hand-built structures): close each short leg individually.
+    # Leftover long legs are paid-for assets with zero further risk.
+    if shorts:
         return ("shorts_only", "cash_secured_put")
     return None
 
@@ -102,11 +115,22 @@ def _exit_reason(
     if net is None:
         return None
     entry, current = net
-    if entry <= 0:
-        return None  # not a credit structure; only time-exit applies
-    captured = (entry - current) / entry
-    if captured >= g.exit_profit_take_pct:
-        return ("profit", f"captured {captured:.0%} of the entry credit (target {g.exit_profit_take_pct:.0%})")
+    if entry > 0:
+        # credit structure: profit = share of the entry credit kept so far
+        captured = (entry - current) / entry
+        if captured >= g.exit_profit_take_pct:
+            return ("profit", f"captured {captured:.0%} of the entry credit (target {g.exit_profit_take_pct:.0%})")
+        return None
+    if entry < 0 and len(legs) == 2 and occ_type(legs[0]["symbol"]) == occ_type(legs[1]["symbol"]):
+        # debit vertical: profit = share of the MAX gain (width - debit) earned
+        width = abs(occ_strike(legs[0]["symbol"]) - occ_strike(legs[1]["symbol"]))
+        debit0, value_now = -entry, -current
+        max_profit = width - debit0
+        if max_profit > 0:
+            captured = (value_now - debit0) / max_profit
+            if captured >= g.exit_profit_take_pct:
+                return ("profit",
+                        f"captured {captured:.0%} of the max gain (target {g.exit_profit_take_pct:.0%})")
     return None
 
 
@@ -143,8 +167,13 @@ def _close_package(legs: list[dict[str, Any]], strategy_type: StrategyType, reas
     contracts = int(min(abs(float(l["qty"])) for l in legs))
     if contracts < 1:
         return None
-    # closing a credit structure = paying a debit; executor: positive = debit
-    net_limit = round(max(current, 0.0) * PRICE_BUFFER + MIN_TICK, 2)
+    # Closing a credit structure = paying a debit (positive limit, pay up to 5%
+    # over the mark). Closing a debit structure = collecting a credit (negative
+    # limit, accept up to 5% under the mark). Executor: positive = debit.
+    if current >= 0:
+        net_limit = round(current * PRICE_BUFFER + MIN_TICK, 2)
+    else:
+        net_limit = round(current * (2 - PRICE_BUFFER), 2)
     und = occ_underlying(legs[0]["symbol"])
     label = f"{strategy_type.replace('_', ' ')} on {und}"
     return OrderPlan(
@@ -161,7 +190,10 @@ def _close_package(legs: list[dict[str, Any]], strategy_type: StrategyType, reas
         ],
         est_max_loss=0.0,
         est_credit_or_debit=-net_limit,
-        human=f"close {contracts}x {label}, net debit limit ${net_limit:.2f} ({reason[1]}).",
+        human=(
+            f"close {contracts}x {label}, net "
+            f"{'debit' if net_limit >= 0 else 'credit'} limit ${abs(net_limit):.2f} ({reason[1]})."
+        ),
         meta={
             "closing": True, "entry_price": entry, "signed_qty": -contracts,
             "pnl_multiplier": 100, "family": strategy_type,

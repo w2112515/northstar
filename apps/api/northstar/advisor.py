@@ -1,4 +1,4 @@
-"""Helm Advisor: regime-conditioned sleeve-tilt suggestions, human-decided.
+"""Plan Advisor: regime-conditioned sleeve-tilt suggestions, human-decided.
 
 When the compass shows a stable regime and one crew has real (non-refused)
 edge in that weather, the advisor proposes a BOUNDED reallocation of plan
@@ -117,7 +117,7 @@ def maybe_propose(store) -> dict[str, Any] | None:
         JournalEvent(
             kind="approval",
             human=(
-                f"Helm advisor: this weather has favored {fam.replace('_', ' ')} - proposing to "
+                f"Plan advisor: this weather has favored {fam.replace('_', ' ')} - proposing to "
                 f"tilt {tilts[fam]:+.0%} toward it (bounded, reversible). Adopt or dismiss in the cockpit."
             ),
             payload=proposal,
@@ -156,9 +156,9 @@ def decide_advice(store, adopt: bool) -> dict[str, Any]:
     store.append_event(
         JournalEvent(
             kind="approval",
-            human=(f"You adopted the helm advice - plan weights tilted toward {proposal['best_family'].replace('_', ' ')}."
+            human=(f"You adopted the plan advice - weights tilted toward {proposal['best_family'].replace('_', ' ')}."
                    if adopt else
-                   "You dismissed the helm advice - weights unchanged. We'll still score what would have happened."),
+                   "You dismissed the plan advice - weights unchanged. We'll still score what would have happened."),
             payload=proposal,
             refs={"advice_id": proposal["id"]},
         )

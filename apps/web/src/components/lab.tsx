@@ -114,7 +114,7 @@ export function EvolutionTab() {
   return (
     <div className="flex flex-col gap-3">
       {err && (
-        <div className="rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+        <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           {err}
         </div>
       )}
@@ -140,8 +140,15 @@ export function EvolutionTab() {
           {pending.map((e) => (
             <article key={e.id} className="panel p-4">
               <div className="flex items-start justify-between gap-2">
-                <div className="text-sm font-medium text-ink">{e.family.replace(/_/g, " ")}</div>
-                <Badge tone="amber">your call</Badge>
+                <div className="text-sm font-medium text-ink">
+                  {e.family.replace(/_/g, " ")}
+                  {/* neighbors were indistinguishable ("dsl rotation" twice) */}
+                  <span className="num ml-1.5 text-micro text-mist">#{e.id.slice(-4)}</span>
+                </div>
+                <span className="flex shrink-0 gap-1.5">
+                  {e.proposed_by === "gemini" && <Badge tone="gold">AI</Badge>}
+                  <Badge tone="amber">your call</Badge>
+                </span>
               </div>
               <p className="mt-2 text-xs text-mist">{e.hypothesis}</p>
               {e.backtest && (
@@ -184,7 +191,7 @@ export function EvolutionTab() {
             </div>
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat k="OOS Sharpe (no gate)" v={wx.oos.baseline.sharpe?.toFixed(2) ?? "-"} />
-              <Stat k="OOS Sharpe (gated)" v={wx.oos.gated.sharpe?.toFixed(2) ?? "-"} tone="text-gold" />
+              <Stat k="OOS Sharpe (gated)" v={wx.oos.gated.sharpe?.toFixed(2) ?? "-"} />
               <Stat k="Max DD (no gate)" v={fmtPct(wx.oos.baseline.max_dd)} />
               <Stat k="Max DD (gated)" v={fmtPct(wx.oos.gated.max_dd)} />
             </dl>
@@ -206,9 +213,10 @@ export function EvolutionTab() {
       </Panel>
 
       <Panel className="p-4">
-        <div className="kicker">Strategy design · DSL specs</div>
+        <div className="kicker">Strategy design · rule-language (DSL) specs</div>
         {designedPending > 0 && (
-          <p className="mt-2 font-mono text-micro text-gold">
+          // amber: this line asks for a human decision, not a star moment
+          <p className="mt-2 font-mono text-micro text-amber">
             {designedPending} designed spec{designedPending > 1 ? "s" : ""} awaiting your call above.
           </p>
         )}
@@ -359,7 +367,7 @@ export function MiningTab() {
     <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
       <Panel className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="kicker">Factor IC · screening known factors</span>
+          <span className="kicker">Factor IC (information coefficient) · screening known factors</span>
           <Button variant="ghost" size="sm" onClick={mineRound} disabled={miningBusy !== ""}>
             {miningBusy === "round" ? "Searching + grading…" : "Mine expressions"}
           </Button>
@@ -368,7 +376,7 @@ export function MiningTab() {
         {!loaded ? (
           <Skeleton rows={6} className="mt-3" />
         ) : factorsQ.error || miningQ.error ? (
-          <p className="mt-3 rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+          <p className="mt-3 rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
             Factor data unreachable - shown data may be stale.
           </p>
         ) : !factors || factors.rows.length === 0 ? (
@@ -400,8 +408,9 @@ export function MiningTab() {
                         {r.ic_mean != null ? r.ic_mean.toFixed(3) : "-"}
                       </td>
                       <td
+                        // significance is emphasis (ink), not a star moment (gold)
                         className={`num py-1.5 pr-2 text-right ${
-                          r.t_stat != null && Math.abs(r.t_stat) >= 2 ? "text-gold" : "text-mist"
+                          r.t_stat != null && Math.abs(r.t_stat) >= 2 ? "font-medium text-ink" : "text-mist"
                         }`}
                       >
                         {r.t_stat != null ? r.t_stat.toFixed(1) : "-"}

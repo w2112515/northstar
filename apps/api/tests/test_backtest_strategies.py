@@ -3,7 +3,13 @@
 import numpy as np
 import pandas as pd
 
-from northstar.backtest import ma_cross_backtest, metrics, rsi_reversion_backtest, walk_forward_eval
+from northstar.backtest import (
+    ma_cross_backtest,
+    metrics,
+    monte_carlo_goal,
+    rsi_reversion_backtest,
+    walk_forward_eval,
+)
 
 
 def synthetic_bars(n_days: int = 700, n_syms: int = 4, seed: int = 3) -> dict[str, pd.DataFrame]:
@@ -80,3 +86,34 @@ def test_evolvable_families_have_param_spaces_and_defaults():
         for key, (lo, hi) in space.items():
             assert key in defaults, f"{family}.{key} missing default"
             assert lo <= int(defaults[key]) <= hi, f"{family}.{key} default outside space"
+
+
+# --------------------------------------------------------------------------- Monte Carlo
+
+def test_monte_carlo_goal_is_deterministic_and_bounded():
+    monthly = [0.01, -0.02, 0.03, 0.005, -0.01, 0.02] * 8  # 48 months
+    a = monte_carlo_goal(monthly, months=12, capital=100_000, target_amount=110_000)
+    b = monte_carlo_goal(monthly, months=12, capital=100_000, target_amount=110_000)
+    assert a["probability"] == b["probability"]  # seeded -> reproducible
+    assert 0.0 <= a["probability"] <= 1.0
+    assert len(a["band_p50"]) == 12
+    assert a["p10_final"] <= a["median_final"] <= a["p90_final"]
+    assert "stationary bootstrap" in a["method"]
+
+
+def test_monte_carlo_thin_history_stays_honest():
+    assert monte_carlo_goal([0.01] * 6, months=12, capital=1, target_amount=2)["probability"] is None
+    assert monte_carlo_goal([0.01] * 24, months=0, capital=1, target_amount=2)["probability"] is None
+
+
+def test_block_bootstrap_respects_streaks():
+    """History with long win/loss runs: block resampling must show wider
+    dispersion than iid draws (mean_block=1), or streak risk is being erased."""
+    monthly = [0.04] * 12 + [-0.04] * 12 + [0.04] * 12 + [-0.04] * 12
+    blocked = monte_carlo_goal(monthly, months=24, capital=100.0, target_amount=120.0,
+                               mean_block=6)
+    iid = monte_carlo_goal(monthly, months=24, capital=100.0, target_amount=120.0,
+                           mean_block=1)
+    spread_blocked = blocked["p90_final"] - blocked["p10_final"]
+    spread_iid = iid["p90_final"] - iid["p10_final"]
+    assert spread_blocked > spread_iid

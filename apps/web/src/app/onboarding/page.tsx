@@ -6,11 +6,16 @@
  *  goal orbit - the promise before the proof. Real preview/commit API. */
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiPost, fmtPct, fmtUsd } from "@/lib/api";
+import { useApi } from "@/lib/data";
 import { Badge, Button, Input, NorthStarMark, PaperBadge } from "@/components/ui";
 import { GoalOrbit } from "@/components/orbit";
 import { TrajectoryHero } from "@/components/trajectory";
+import type { EngineState } from "@/lib/types";
+
+type Alternative = { text: string; changes: Record<string, number> };
 
 type Preview = {
   goal: Record<string, unknown>;
@@ -22,7 +27,7 @@ type Preview = {
     allocations: { strategy_id: string; weight: number; why: string }[];
     guardrails: Record<string, number>;
     baseline_note: string;
-    honest_alternatives: string[];
+    honest_alternatives: Alternative[];
   };
   bands: { p10: number[]; p50: number[]; p90: number[] };
   months: number;
@@ -72,12 +77,22 @@ export default function Onboarding() {
   const [capital, setCapital] = useState(100000);
   const [mode, setMode] = useState<"target_amount" | "monthly_income">("target_amount");
   const [target, setTarget] = useState(110000);
-  const [months, setMonths] = useState(12);
+  // Raw string so the field can actually be cleared while typing - the old
+  // `Number(v) || 12` snapped every backspace straight back to 12.
+  const [monthsRaw, setMonthsRaw] = useState("12");
   const [monthly, setMonthly] = useState(800);
   const [answers, setAnswers] = useState<number[]>([1, 1, 1]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [nlText, setNlText] = useState("");
+  const [nlBusy, setNlBusy] = useState(false);
+  const [nlNote, setNlNote] = useState<{ tone: "ok" | "miss"; text: string } | null>(null);
+
+  // A returning user may only be revisiting - give them a way back out.
+  const hasGoal = !!useApi<EngineState>("/api/engine/state").data?.goal;
+
+  const months = Number(monthsRaw);
 
   const risk = useMemo(() => {
     const total = answers.reduce((a, b) => a + b, 0);
@@ -85,10 +100,12 @@ export default function Onboarding() {
   }, [answers]);
 
   // Validate before enabling the next step - a nonsense goal produces a
-  // nonsense plan, and the preview API should never see one.
+  // nonsense plan, and the preview API should never see one. The horizon
+  // bounds (6-60) are enforced here, not just hinted in HTML attributes.
   const capitalOk = capital >= 25000;
   const targetOk = mode === "monthly_income" ? monthly > 0 : target > capital;
-  const step0Ok = capitalOk && targetOk;
+  const monthsOk = Number.isInteger(months) && months >= 6 && months <= 60;
+  const step0Ok = capitalOk && targetOk && monthsOk;
 
   const goalBody = useMemo(
     () => ({
@@ -102,11 +119,32 @@ export default function Onboarding() {
     [mode, capital, target, months, monthly, risk],
   );
 
-  async function loadPreview() {
+  async function parseSentence() {
+    const text = nlText.trim();
+    if (!text) return;
+    setNlBusy(true);
+    setNlNote(null);
+    try {
+      const r = await apiPost<{ fields: Record<string, unknown> }>("/api/goal/parse", { text });
+      const f = r.fields;
+      if (f.mode === "monthly_income" || f.mode === "target_amount") setMode(f.mode);
+      if (typeof f.capital_base === "number") setCapital(f.capital_base);
+      if (typeof f.target_amount === "number") setTarget(f.target_amount);
+      if (typeof f.monthly_target === "number") setMonthly(f.monthly_target);
+      if (typeof f.horizon_months === "number") setMonthsRaw(String(f.horizon_months));
+      setNlNote({ tone: "ok", text: "Filled in below - check the numbers, then continue." });
+    } catch {
+      setNlNote({ tone: "miss", text: "Could not read a goal out of that - the fields below still work." });
+    } finally {
+      setNlBusy(false);
+    }
+  }
+
+  async function previewWith(body: typeof goalBody) {
     setLoading(true);
     setError("");
     try {
-      const p = await apiPost<Preview>("/api/goal/preview", goalBody);
+      const p = await apiPost<Preview>("/api/goal/preview", body);
       setPreview(p);
       setStep(2);
     } catch {
@@ -114,6 +152,39 @@ export default function Onboarding() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadPreview() {
+    return previewWith(goalBody);
+  }
+
+  /** One tap on an honest alternative: apply its numbers to the form state
+   *  and recompute the plan immediately (state updates are async, so the
+   *  recompute uses an explicit body instead of reading state back). */
+  function applyAlternative(a: Alternative) {
+    const next = { ...goalBody };
+    const t = a.changes.target_amount;
+    const h = a.changes.horizon_months;
+    const c = a.changes.capital_base;
+    if (typeof t === "number") {
+      const v = Math.round(t);
+      setMode("target_amount");
+      setTarget(v);
+      next.mode = "target_amount";
+      next.target_amount = v;
+      next.monthly_target = null;
+    }
+    if (typeof h === "number") {
+      const v = Math.round(h);
+      setMonthsRaw(String(v));
+      next.horizon_months = v;
+    }
+    if (typeof c === "number") {
+      const v = Math.round(c);
+      setCapital(v);
+      next.capital_base = v;
+    }
+    void previewWith(next);
   }
 
   async function commit() {
@@ -128,7 +199,8 @@ export default function Onboarding() {
   }
 
   const feas = preview?.plan.feasibility;
-  const destAmount = mode === "target_amount" ? target : capital + monthly * months;
+  const destAmount =
+    mode === "target_amount" ? target : capital + monthly * (Number.isFinite(months) ? months : 0);
 
   return (
     <div className="starfield min-h-dvh">
@@ -136,10 +208,10 @@ export default function Onboarding() {
         {/* left rail: the promise + the steps */}
         <div className="flex flex-col gap-6 p-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-gold">
+            <Link href="/" className="flex items-center gap-2 text-gold" aria-label="Back to Overview">
               <NorthStarMark />
               <span className="text-sm font-medium text-ink">NorthStar</span>
-            </div>
+            </Link>
             <PaperBadge />
           </div>
           <div>
@@ -159,11 +231,11 @@ export default function Onboarding() {
                   aria-label={i < step ? `Back to ${label}` : label}
                   aria-current={i === step ? "step" : undefined}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 ${
-                    i === step ? "bg-panel text-ink" : i < step ? "text-mist hover:text-ink" : "text-mist/60"
+                    i === step ? "bg-panel text-ink" : i < step ? "text-mist hover:text-ink" : "text-mist/75"
                   }`}
                 >
                   <span
-                    className={`num text-xs ${i <= step ? "text-gold" : "text-mist/60"}`}
+                    className={`num text-xs ${i <= step ? "text-gold" : "text-mist/75"}`}
                   >
                     {String(i + 1).padStart(2, "0")}
                   </span>
@@ -173,7 +245,12 @@ export default function Onboarding() {
               </li>
             ))}
           </ol>
-          <p className="mt-auto hidden font-mono text-micro tracking-wide text-mist/60 lg:block">
+          {hasGoal && (
+            <Link href="/" className="text-xs text-mist underline-offset-2 hover:text-ink hover:underline">
+              Keep my current plan - back to the cockpit →
+            </Link>
+          )}
+          <p className="mt-auto hidden font-mono text-micro tracking-wide text-mist lg:block">
             PAPER ONLY · NO REAL MONEY · YOU CAN CHANGE EVERYTHING LATER
           </p>
         </div>
@@ -182,6 +259,35 @@ export default function Onboarding() {
         <div className="flex flex-col justify-center p-4 md:p-8">
           {step === 0 && (
             <section className="panel p-6">
+              {/* One sentence in, structured goal out. Suggest-only: the parse
+                  prefills the fields below and the user always confirms. */}
+              <div className="panel-inset mb-5 p-3">
+                <label htmlFor="nl" className="kicker">Say it in one sentence</label>
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    id="nl"
+                    type="text"
+                    maxLength={400}
+                    placeholder={'e.g. "Grow $100k to $120k in 18 months" - any language works'}
+                    value={nlText}
+                    onChange={(e) => setNlText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !nlBusy) parseSentence();
+                    }}
+                  />
+                  <Button variant="ghost" disabled={nlBusy || !nlText.trim()} onClick={parseSentence}>
+                    {nlBusy ? "Reading…" : "Fill the fields"}
+                  </Button>
+                </div>
+                {nlNote && (
+                  <p
+                    className={`mt-1.5 font-mono text-micro ${nlNote.tone === "ok" ? "text-teal" : "text-amber"}`}
+                    role="status"
+                  >
+                    {nlNote.text}
+                  </p>
+                )}
+              </div>
               <div className="kicker">The destination</div>
               <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
                 <div className="hero-num text-gold">{fmtUsd(destAmount, 0)}</div>
@@ -255,10 +361,15 @@ export default function Onboarding() {
                         type="number"
                         min={6}
                         max={60}
-                        value={months}
-                        onChange={(e) => setMonths(Number(e.target.value) || 12)}
+                        value={monthsRaw}
+                        onChange={(e) => setMonthsRaw(e.target.value)}
                         className="mt-1"
                       />
+                      {!monthsOk && (
+                        <p className="mt-1 font-mono text-micro text-amber">
+                          Horizon must be 6 to 60 whole months.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -287,10 +398,15 @@ export default function Onboarding() {
                         type="number"
                         min={6}
                         max={60}
-                        value={months}
-                        onChange={(e) => setMonths(Number(e.target.value) || 12)}
+                        value={monthsRaw}
+                        onChange={(e) => setMonthsRaw(e.target.value)}
                         className="mt-1"
                       />
+                      {!monthsOk && (
+                        <p className="mt-1 font-mono text-micro text-amber">
+                          Horizon must be 6 to 60 whole months.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -313,7 +429,10 @@ export default function Onboarding() {
               <div className="mt-6 space-y-6">
                 {RISK_QUESTIONS.map((rq, qi) => (
                   <fieldset key={qi}>
-                    <legend className="text-sm text-ink">{rq.q}</legend>
+                    <legend className="text-sm text-ink">
+                      {rq.q}
+                      <span className="sr-only"> - choose one of three</span>
+                    </legend>
                     <div className="mt-2 grid gap-2">
                       {rq.opts.map((o, oi) => (
                         <button
@@ -334,7 +453,7 @@ export default function Onboarding() {
                   </fieldset>
                 ))}
               </div>
-              <div className="mt-6 rounded-lg bg-panel p-4">
+              <div className="panel-inset mt-6 p-4">
                 <div className="kicker">Guardrails · {risk}</div>
                 <ul className="mt-2 space-y-1 text-sm text-ink">
                   <li>
@@ -366,15 +485,20 @@ export default function Onboarding() {
             <section className="panel p-6">
               <div className="kicker">The honest plan</div>
               <div className="mt-2 flex flex-wrap items-end gap-3">
-                <div
-                  className={`hero-num ${
-                    feas === "green" ? "text-teal" : feas === "yellow" ? "text-amber" : "text-coral"
-                  }`}
-                >
+                {/* Odds wear gold (star moment, contract §2); only the red
+                    verdict bleeds coral. The rating text carries the grade -
+                    never amber, which stays reserved for human-decision waits. */}
+                <div className={`hero-num ${feas === "red" ? "text-coral" : "text-gold"}`}>
                   {fmtPct(preview.plan.probability, 0)}
                 </div>
                 <div>
-                  <div className="text-sm text-ink">{FEAS_TEXT[feas ?? "yellow"]}</div>
+                  <div
+                    className={`text-sm ${
+                      feas === "green" ? "text-teal" : feas === "red" ? "text-coral" : "text-ink"
+                    }`}
+                  >
+                    {FEAS_TEXT[feas ?? "yellow"]}
+                  </div>
                   <div className="text-2xs text-mist">Historical estimate, not a promise.</div>
                 </div>
               </div>
@@ -392,18 +516,47 @@ export default function Onboarding() {
               </div>
 
               {feas !== "green" && preview.plan.honest_alternatives.length > 0 && (
-                <div className="mt-5 rounded-lg bg-coral-dim p-4 shadow-tone-coral">
-                  <div className="text-sm font-medium text-coral">Red path</div>
+                // coral is reserved for the red verdict; a stretch (yellow)
+                // plan gets a neutral "raise the odds" block instead
+                <div
+                  className={`mt-5 rounded-lg p-4 ${
+                    feas === "red" ? "bg-coral-dim shadow-tone-coral" : "panel-inset"
+                  }`}
+                >
+                  <div className={`text-sm font-medium ${feas === "red" ? "text-coral" : "text-ink"}`}>
+                    {feas === "red" ? "Red path - this goal needs a rethink" : "Ways to raise the odds"}
+                  </div>
                   <ul className="mt-2 space-y-2 text-sm text-ink">
                     {preview.plan.honest_alternatives.map((a, i) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="text-coral">→</span>
-                        <span>{a}</span>
+                      <li key={i} className="flex flex-wrap items-center gap-2">
+                        <span className={feas === "red" ? "text-coral" : "text-mist"} aria-hidden>
+                          →
+                        </span>
+                        <span className="min-w-0 flex-1">{a.text}</span>
+                        {Object.keys(a.changes ?? {}).length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={loading}
+                            onClick={() => applyAlternative(a)}
+                            title="Apply these numbers and recompute the odds"
+                          >
+                            Use these numbers
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>
                   <div className="mt-3">
-                    <Button variant="ghost" size="sm" onClick={() => setStep(0)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setStep(0);
+                        // land the user on the field they most likely need
+                        requestAnimationFrame(() => document.getElementById("tgt")?.focus());
+                      }}
+                    >
                       Adjust my destination
                     </Button>
                   </div>
@@ -412,12 +565,13 @@ export default function Onboarding() {
 
               <div className="mt-6 grid gap-2 sm:grid-cols-2">
                 {preview.plan.allocations.map((a) => (
-                  <article key={a.strategy_id} className="rounded-lg bg-panel p-3">
+                  <article key={a.strategy_id} className="panel-inset p-3">
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm capitalize text-ink">
                         {a.strategy_id.replace(/_/g, " ")}
                       </span>
-                      <span className="num text-xs text-gold">{fmtPct(a.weight, 0)}</span>
+                      {/* weights are table data, not star moments */}
+                      <span className="num text-xs text-ink">{fmtPct(a.weight, 0)}</span>
                     </div>
                     <p className="mt-1 text-xs text-mist">{a.why}</p>
                   </article>
@@ -432,7 +586,7 @@ export default function Onboarding() {
                 <li>· Kill switch is always one click away</li>
               </ul>
               {preview.plan.baseline_note && (
-                <p className="mt-3 rounded-lg bg-panel p-3 text-xs leading-relaxed text-mist">
+                <p className="panel-inset mt-3 p-3 text-xs leading-relaxed text-mist">
                   {preview.plan.baseline_note}
                 </p>
               )}
@@ -458,7 +612,7 @@ export default function Onboarding() {
                 <li>The journal is append-only. Rejections stay. Failures stay.</li>
                 <li>Odds are a historical estimate, not a promise.</li>
               </ul>
-              <div className="mt-6 rounded-lg bg-panel p-4 text-sm">
+              <div className="panel-inset mt-6 p-4 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <Badge>{fmtUsd(capital, 0)} paper</Badge>
                   <Badge tone="gold">
@@ -482,7 +636,7 @@ export default function Onboarding() {
             </section>
           )}
 
-          <p className="mt-6 text-center text-micro leading-relaxed text-mist/60 lg:hidden">
+          <p className="mt-6 text-center text-micro leading-relaxed text-mist lg:hidden">
             Paper trading only · estimates, not promises · not investment advice
           </p>
         </div>

@@ -184,7 +184,7 @@ _FETCHERS = {"vol": _fetch_vol, "news": _fetch_news, "global": _fetch_gdelt}
 
 def _template_report(score: int | None, b: str, worst: str | None) -> str:
     if b == "offline":
-        return "Weather instruments are offline - sailing by the risk gates alone."
+        return "Weather instruments are offline - running on the risk gates alone."
     worst_name = COMPONENT_NAMES.get(worst or "", "conditions")
     if b == "clear":
         return f"Clear conditions (score {score}) - volatility and news flow look ordinary."

@@ -15,9 +15,7 @@ const OUT = resolve(process.argv[3] ?? "artifacts/ui-attack");
 mkdirSync(OUT, { recursive: true });
 
 // SWR polls keep the network busy forever, so "networkidle" never fires.
-// Load + a fixed settle window is the reliable option here.
-const SETTLE_MS = 7000;
-
+// Instead: wait until no skeletons remain and the KPI bar left "syncing…".
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function shot(page, name, { fullPage = true } = {}) {
@@ -25,9 +23,19 @@ async function shot(page, name, { fullPage = true } = {}) {
   console.log(`  ✓ ${name}.png`);
 }
 
+async function settle(page) {
+  await page
+    .waitForFunction(
+      () => !document.querySelector(".skel") && !document.body.innerText.includes("syncing…"),
+      { timeout: 45000 },
+    )
+    .catch(() => console.log("  (settle timeout - capturing as-is)"));
+  await sleep(1500); // charts animate in after data lands
+}
+
 async function goto(page, path) {
   await page.goto(`${BASE}${path}`, { waitUntil: "load", timeout: 60000 });
-  await sleep(SETTLE_MS);
+  await settle(page);
 }
 
 const browser = await chromium.launch();

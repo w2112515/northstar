@@ -3,7 +3,7 @@
 /* Night Voyage, Grok-prototype edition - the approved visual authority.
    Token system, component classes and motion ported from the reference
    prototype; charts take colors from lib/theme.ts which mirrors these.
-   Copy blacklist (captain/voyage/fleet/helm/sail/dock) still applies to UI
+   Copy blacklist (see scripts/check-copy.mjs) still applies to UI
    strings - see docs/DESIGN.md. */
 
 @theme {
@@ -81,10 +81,13 @@
     color: var(--color-ink);
   }
 
-  /* one designed focus ring for the whole app */
+  /* One designed focus ring for the whole app. Must be outline-based:
+     box-shadow here loses to utility classes (shadow-border, shadow-tone-*)
+     because utilities cascade-layer above base - which silently killed the
+     ring on every input and toned button. Outline never competes. */
   :focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--color-void), 0 0 0 4px var(--color-signal);
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
   }
 
   h1,
@@ -133,12 +136,15 @@
     background: var(--color-night);
     box-shadow: var(--shadow-border);
     border-radius: var(--radius-xl);
+    /* semantic tone rings (waiting/danger/champion) fade in, never snap */
+    transition: box-shadow 150ms ease;
   }
 
   .panel-inset {
     background: var(--color-panel);
     box-shadow: var(--shadow-border);
     border-radius: var(--radius-lg);
+    transition: box-shadow 150ms ease;
   }
 
   .hairline {

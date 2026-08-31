@@ -20,6 +20,21 @@ class CompileError(Exception):
     """No contract satisfies the constraints - a first-class, journaled outcome."""
 
 
+MAX_CONTRACTS = 10  # absolute per-order sanity cap, independent of any budget
+
+
+def _contracts_for_budget(budget: float, per_contract_risk: float) -> int:
+    """How many contracts a $ risk budget affords - never 0, never past the cap.
+
+    budget<=0 (no budget passed - old proposals, tests) keeps legacy size 1.
+    A budget below one contract's risk also returns 1: the gate still owns
+    the final yes/no, the compiler never silently drops a proposal.
+    """
+    if budget <= 0 or per_contract_risk <= 0:
+        return 1
+    return max(1, min(MAX_CONTRACTS, int(budget // per_contract_risk)))
+
+
 def occ_strike(symbol: str) -> float:
     return int(symbol[-8:]) / 1000.0
 
@@ -78,21 +93,25 @@ def compile_csp(proposal: TradeProposal) -> OrderPlan:
         )
     strike = occ_strike(pick["symbol"])
     mid = _mid(pick["bid"], pick["ask"])
-    credit = mid * 100
+    # deploy the name's collateral budget, not one token contract: the gate's
+    # csp_collateral_cap and the sleeve budget still bound the total
+    n = _contracts_for_budget(float(p["capital_cap"]), strike * 100)
+    credit = mid * 100 * n
+    collateral = strike * 100 * n
     return OrderPlan(
         proposal_id=proposal.id,
         strategy_type="cash_secured_put",
-        legs=[OrderLeg(symbol=pick["symbol"], side="sell", qty=1, asset_class="us_option", limit_price=mid)],
-        est_max_loss=strike * 100 - credit,     # honest: stock to zero
+        legs=[OrderLeg(symbol=pick["symbol"], side="sell", qty=n, asset_class="us_option", limit_price=mid)],
+        est_max_loss=collateral - credit,       # honest: stock to zero
         est_credit_or_debit=credit,
         human=(
-            f"Sell 1 {proposal.underlying} put, strike ${strike:g} "
+            f"Sell {n} {proposal.underlying} put{'s' if n > 1 else ''}, strike ${strike:g} "
             f"(exp {occ_expiry_yymmdd(pick['symbol'])}), collect ~${credit:,.0f}. "
-            f"Collateral ${strike * 100:,.0f}."
+            f"Collateral ${collateral:,.0f}."
         ),
         meta={"delta": pick["delta"], "bid": pick["bid"], "ask": pick["ask"],
               "spread_pct": round((pick["ask"] - pick["bid"]) / mid, 3),
-              "collateral": strike * 100},
+              "collateral": collateral, "contracts": n},
     )
 
 
@@ -202,7 +221,9 @@ def compile_vertical(proposal: TradeProposal, chain: list[dict[str, Any]] | None
             f"{proposal.underlying} spread premium too thin: credit ${credit:.2f} on ${width:g} width "
             f"(< {min_ratio:.0%} of width) - not worth the risk"
         )
-    max_loss = (width - credit) * 100
+    per_contract_loss = (width - credit) * 100
+    n = _contracts_for_budget(float(p.get("risk_budget", 0.0)), per_contract_loss)
+    max_loss = per_contract_loss * n
     kind = "put" if want_put else "call"
     s_strike, l_strike = occ_strike(pair[0]["symbol"]), occ_strike(pair[1]["symbol"])
     return OrderPlan(
@@ -210,13 +231,97 @@ def compile_vertical(proposal: TradeProposal, chain: list[dict[str, Any]] | None
         strategy_type=proposal.strategy_type,
         legs=legs,
         est_max_loss=max_loss,
-        est_credit_or_debit=credit * 100,
+        est_credit_or_debit=credit * 100 * n,
         human=(
-            f"Sell {proposal.underlying} {kind} spread {s_strike:g}/{l_strike:g} "
-            f"(exp {occ_expiry_yymmdd(pair[0]['symbol'])}), collect ~${credit * 100:,.0f}, "
-            f"max loss ${max_loss:,.0f} - capped by design."
+            f"Sell {n} {proposal.underlying} {kind} spread{'s' if n > 1 else ''} "
+            f"{s_strike:g}/{l_strike:g} (exp {occ_expiry_yymmdd(pair[0]['symbol'])}), "
+            f"collect ~${credit * 100 * n:,.0f}, max loss ${max_loss:,.0f} - capped by design."
         ),
-        meta={**_spread_meta([pair], credit), "width": width, "credit": credit},
+        meta={**_spread_meta([pair], credit), "width": width, "credit": credit, "contracts": n},
+    )
+
+
+def select_debit_call_vertical(
+    chain: list[dict[str, Any]], long_delta: float, width: float, band: float = 0.10,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """(long, short) for a bull call debit spread: long call by delta (the
+    directional leg, ~ATM), short wing = liquid same-expiry call nearest
+    `width` above it. Pure function - tests inject synthetic chains."""
+    long = _pick_by_delta(chain, want_put=False, target_delta=long_delta, band=band)
+    if long is None:
+        return None
+    expiry = occ_expiry_yymmdd(long["symbol"])
+    l_strike = occ_strike(long["symbol"])
+    target = l_strike + width
+    wings = [
+        c for c in chain
+        if not occ_is_put(c["symbol"])
+        and occ_expiry_yymmdd(c["symbol"]) == expiry
+        and c["symbol"] != long["symbol"]
+        and _liquid(c)
+        and occ_strike(c["symbol"]) > l_strike
+    ]
+    if not wings:
+        return None
+    short = min(wings, key=lambda c: abs(occ_strike(c["symbol"]) - target))
+    return long, short
+
+
+def compile_debit_vertical(proposal: TradeProposal, chain: list[dict[str, Any]] | None = None) -> OrderPlan:
+    """Long vertical debit spread (bull call): pay a net debit that IS the max
+    loss; gain capped at width minus debit. One atomic mleg order."""
+    p = proposal.params
+    if chain is None:
+        chain = option_chain(proposal.underlying, int(p["dte_min"]), int(p["dte_max"]))
+    pair = select_debit_call_vertical(chain, float(p.get("long_delta", 0.55)), float(p["width"]))
+    if pair is None:
+        raise CompileError(
+            f"No liquid {proposal.underlying} call debit spread near delta "
+            f"{float(p.get('long_delta', 0.55)):.2f}, width ~${p['width']:g}, "
+            f"DTE {p['dte_min']}-{p['dte_max']}"
+        )
+    long, short = pair
+    long_mid, short_mid = _mid(long["bid"], long["ask"]), _mid(short["bid"], short["ask"])
+    debit = round(long_mid - short_mid, 2)
+    width = abs(occ_strike(short["symbol"]) - occ_strike(long["symbol"]))
+    max_ratio = float(p.get("max_debit_ratio", 0.60))
+    if debit <= 0 or width <= 0 or debit / width > max_ratio:
+        raise CompileError(
+            f"{proposal.underlying} call spread costs too much: ${debit:.2f} on ${width:g} width "
+            f"(> {max_ratio:.0%} of width) - the reward doesn't cover the cost"
+        )
+    per_contract_loss = debit * 100
+    n = _contracts_for_budget(float(p.get("risk_budget", 0.0)), per_contract_loss)
+    max_loss = per_contract_loss * n
+    max_profit = (width - debit) * 100 * n
+    worst_spread = max(
+        (c["ask"] - c["bid"]) / _mid(c["bid"], c["ask"]) for c in (long, short)
+    )
+    return OrderPlan(
+        proposal_id=proposal.id,
+        strategy_type="bull_call_spread",
+        legs=[
+            OrderLeg(symbol=long["symbol"], side="buy", qty=1, asset_class="us_option",
+                     limit_price=long_mid),
+            OrderLeg(symbol=short["symbol"], side="sell", qty=1, asset_class="us_option",
+                     limit_price=short_mid),
+        ],
+        est_max_loss=max_loss,                    # honest: the debit is all we can lose
+        est_credit_or_debit=-debit * 100 * n,
+        human=(
+            f"Buy {n} {proposal.underlying} call spread{'s' if n > 1 else ''} "
+            f"{occ_strike(long['symbol']):g}/{occ_strike(short['symbol']):g} "
+            f"(exp {occ_expiry_yymmdd(long['symbol'])}), pay ~${debit * 100 * n:,.0f} - "
+            f"that cost is the max loss; top gain ${max_profit:,.0f}."
+        ),
+        meta={
+            "order_class": "mleg",
+            "net_limit": debit,                   # alpaca mleg: positive = debit
+            "spread_pct": round(worst_spread, 3),
+            "bid": min(long["bid"], short["bid"]),
+            "deltas": {c["symbol"]: c.get("delta") for c in (long, short)},
+            "width": width, "debit": debit, "contracts": n, "max_profit": max_profit,
+        },
     )
 
 
@@ -258,22 +363,24 @@ def compile_iron_condor(proposal: TradeProposal, chain: list[dict[str, Any]] | N
         raise CompileError(
             f"{proposal.underlying} condor premium too thin: credit ${credit:.2f} on ${worst_width:g} width"
         )
-    max_loss = (worst_width - credit) * 100   # only one side can lose at expiry
+    per_contract_loss = (worst_width - credit) * 100   # only one side can lose at expiry
+    n = _contracts_for_budget(float(p.get("risk_budget", 0.0)), per_contract_loss)
+    max_loss = per_contract_loss * n
     return OrderPlan(
         proposal_id=proposal.id,
         strategy_type="iron_condor",
         legs=put_legs + call_legs,
         est_max_loss=max_loss,
-        est_credit_or_debit=credit * 100,
+        est_credit_or_debit=credit * 100 * n,
         human=(
-            f"Iron condor on {proposal.underlying} "
+            f"{n}x iron condor on {proposal.underlying} "
             f"(puts {occ_strike(put_pair[0]['symbol']):g}/{occ_strike(put_pair[1]['symbol']):g}, "
             f"calls {occ_strike(call_pair[0]['symbol']):g}/{occ_strike(call_pair[1]['symbol']):g}, "
-            f"exp {occ_expiry_yymmdd(put_pair[0]['symbol'])}): collect ~${credit * 100:,.0f}, "
+            f"exp {occ_expiry_yymmdd(put_pair[0]['symbol'])}): collect ~${credit * 100 * n:,.0f}, "
             f"max loss ${max_loss:,.0f} - capped by design."
         ),
         meta={**_spread_meta([put_pair, call_pair], credit),
-              "width": worst_width, "credit": credit},
+              "width": worst_width, "credit": credit, "contracts": n},
     )
 
 
@@ -306,6 +413,8 @@ def compile_proposal(proposal: TradeProposal) -> OrderPlan:
         return compile_cc(proposal)
     if proposal.strategy_type in ("bull_put_spread", "bear_call_spread"):
         return compile_vertical(proposal)
+    if proposal.strategy_type == "bull_call_spread":
+        return compile_debit_vertical(proposal)
     if proposal.strategy_type == "iron_condor":
         return compile_iron_condor(proposal)
     if proposal.strategy_type in ("momentum_rotation", "ma_cross_trend", "rsi_mean_reversion",

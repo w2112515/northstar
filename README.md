@@ -20,9 +20,10 @@ Gemini** for orchestration and judgment, and **Alpaca** for real (paper) options
    Every AI trade idea must survive an explicit **bull-vs-bear debate**
    (Disagree-or-Commit, after FinCom 2026): a critic model red-teams the exact
    trade; a strong objection kills it, and the judge is code, not a third LLM.
-3. **A risk gate that cannot be sweet-talked.** 17 pure-function checks (max
-   loss per trade, concentration, per-family sleeve budgets, CSP collateral
-   caps, circuit breakers, naked-call ban, duplicates, liquidity,
+3. **A risk gate that cannot be sweet-talked.** 19 pure-function checks (max
+   loss per trade, concentration, per-family sleeve budgets, a whole-book
+   deployment cap, CSP collateral caps, an earnings blackout for short premium,
+   circuit breakers, naked-call ban, duplicates, liquidity,
    market-weather floor, kill switch). Every rejection is a first-class journal
    record with a reason code. Closing orders are recognized (`meta.closing`)
    and never blocked by new-risk rules — only the kill switch outranks an exit.

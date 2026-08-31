@@ -2,12 +2,12 @@
 user sleeps. The API scheduler triggers it once per UTC date (after 01:00 UTC,
 well after the US close); POST /api/engine/nightly runs it on demand.
 
-1. scout scan - full-market opportunity radar retargets the fleet
+1. scout scan - full-market opportunity radar retargets the book
 2. evolution round for every enabled evolvable champion family
 3. plan odds recompute - makes the cockpit's "recomputed nightly" hint true
 4. weather day summary from the accumulated weather_history readings
 5. one equity point into state/equity_curve (report fallback data)
-6. captain's log - P&L attribution + an honest narrative of the day
+6. day log - P&L attribution + an honest narrative of the day
 """
 
 from __future__ import annotations
@@ -259,7 +259,13 @@ def _captain_template(facts: dict[str, Any]) -> str:
         f" Tomorrow the scout has us watching {', '.join(facts['watch_tomorrow'])}."
         if facts["watch_tomorrow"] else ""
     )
-    return f"Captain's log, {facts['date']}: {day}.{watch}"
+    return f"Day log, {facts['date']}: {day}.{watch}"
+
+
+def _lessons(store) -> dict[str, Any]:
+    from northstar.lessons import distill_lessons
+
+    return distill_lessons(store)
 
 
 def _captain_log(store, results: dict[str, Any]) -> dict[str, Any]:
@@ -271,8 +277,9 @@ def _captain_log(store, results: dict[str, Any]) -> dict[str, Any]:
         import json
 
         narrative = generate_text(
-            "You are the captain of NorthStar, an autonomous paper-trading fleet with a "
-            "hard risk gate. Write tonight's log entry: 4-6 short plain-English sentences, "
+            "You are the narrator of NorthStar, an autonomous paper-trading desk with a "
+            "hard risk gate. Never call the system a fleet, ship, or voyage and never "
+            "call yourself a captain. Write tonight's log entry: 4-6 short plain-English sentences, "
             "first person plural, honest and dry. Stick strictly to these facts (never invent "
             f"numbers, never promise returns):\n{json.dumps(facts)}\n"
             "If the gate rejected trades, credit the discipline. If realized P&L is negative, "
@@ -305,6 +312,7 @@ def run_nightly(store) -> dict[str, Any]:
         ("forecast_score", _forecast_scorecard),  # grade yesterday BEFORE drawing today
         ("forecast", _timesfm_forecasts),
         ("equity", _append_equity_point),
+        ("lessons", _lessons),               # cross-pass memory for tomorrow's triage
         ("captain", _captain_log),           # last: narrates everything above
     ):
         try:
@@ -317,11 +325,11 @@ def run_nightly(store) -> dict[str, Any]:
     parts = []
     sc = results.get("scout")
     if isinstance(sc, dict) and sc.get("top"):
-        parts.append(f"scout retargeted the fleet ({sc['passed_floor']} liquid names, top: {', '.join(sc['top'][:3])})")
+        parts.append(f"scout retargeted the book ({sc['passed_floor']} liquid names, top: {', '.join(sc['top'][:3])})")
     trials = results.get("trials") or []
     if isinstance(trials, list) and trials:
         promoted = sum(1 for t in trials if t.get("outcome") == "promoted")
-        parts.append(f"{len(trials)} paper trial(s) settled ({promoted} took the helm)")
+        parts.append(f"{len(trials)} paper trial(s) settled ({promoted} promoted to champion)")
     evo = results.get("evolution") or []
     if evo:
         parts.append(f"lab ran {len(evo)} evolution round(s)"
@@ -335,13 +343,13 @@ def run_nightly(store) -> dict[str, Any]:
     if isinstance(fc, dict) and "symbols" in fc:
         parts.append(f"TimesFM drew fresh 5-day forecasts for {fc['symbols']} symbols")
     if isinstance(results.get("captain"), dict) and results["captain"].get("narrative"):
-        parts.append("captain's log filed")
+        parts.append("day log filed")
     human = "Night watch: " + ("; ".join(parts) if parts else "quiet night, nothing to report") + "."
 
     store.append_event(JournalEvent(kind="digest", human=human, payload=results))
     store.save("state", "nightly", {"last_run": _today(), "results_ts": results["ts"]})
 
-    # one-pager artifact (equity / trades / regime / scout / captain) - built
+    # one-pager artifact (equity / trades / regime / scout / day log) - built
     # after the digest so it can quote everything the night watch just did
     try:
         from northstar.report import build_daily_report

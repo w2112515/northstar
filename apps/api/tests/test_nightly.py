@@ -1,5 +1,5 @@
 """Night watch: weather day summary, equity curve point, step isolation,
-captain's log attribution + template fallback."""
+day-log attribution + template fallback."""
 
 import northstar.broker as broker
 from northstar.domain import JournalEvent
@@ -58,14 +58,14 @@ def test_run_nightly_isolates_step_failures(monkeypatch):
     assert results["plan_odds"] is None
     assert s.event_log[-1].kind == "digest"
     assert (s.get("state", "nightly") or {})["last_run"] == _today()
-    # scout is env-disabled in tests; captain still files a template log
+    # scout is env-disabled in tests; the day-log step still files a template log
     assert results["scout"].get("skipped")
     assert results["captain"]["narrator"] == "template"
     assert s.event_log[-1].payload["captain"]["narrative"]
 
 
 def _day_event(kind, human, payload):
-    # default ts is utcnow -> already "today" for the captain's day filter
+    # default ts is utcnow -> already "today" for the day-log date filter
     return JournalEvent(kind=kind, human=human, payload=payload)
 
 

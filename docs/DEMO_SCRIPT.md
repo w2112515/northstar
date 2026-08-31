@@ -18,9 +18,15 @@
       上下文条 regime 徽章非 unknown（空则 `POST /api/engine/nightly` 或等夜班）
 - [ ] Track 页有货：Today 每日简报（金边 FieldNote）当日叙事、TrajectoryHero 金航迹线可见
 - [ ] 屏幕 1080p、浏览器 100% 缩放、夜色底在 OBS 里无摩尔纹（全站深色，检查一页即可）
+- [ ] 预演疯狂目标镜头：/start 输入 $1M → $10M / 6 个月，确认红色路径 + 替代方案渲染正常
+      （向导边界：本金 ≥$25k、期限 6-60 个月，别在镜头里试图输入边界外的数字；
+      云端演示账户 = PA34，$1M 起步——8/31 起 $100k 账户已划给 Alpaca 比赛）
+- [ ] 可选节奏旋钮：录制会话给 API 设 `LOOP_MINUTES=5`（默认 15）并重启，pass 更密集、
+      Live schematic 更活跃；纯调度频率，不改任何决策逻辑，录完改回
 - [ ] 准备一个终端窗口，预输入 A2A curl 命令（见下）
-- [ ] **Cloud Run 控制台页签已登录**（northstar-api / northstar-web 两个服务绿灯），
-      `.run.app` URL 能打开——官方要求视频里必须看到项目跑在 Google Cloud 上
+- [ ] **Cloud Run 控制台页签已登录**（`northstar-web` 单服务绿灯，双容器：web 入口 + api sidecar），
+      线上地址 <https://northstar-web-251608445238.us-central1.run.app> 能打开——
+      官方要求视频里必须看到项目跑在 Google Cloud 上
 
 ## 4 分钟版（Google "All Things Agentic" · The Taskmaster）
 
@@ -31,7 +37,7 @@
 | 时间 | 画面与操作 | 台词（英文录制） |
 |---|---|---|
 | 0:00 | 冷开场：Proof 页辩论区特写，红色 "Strong objection - dropped"，鼠标划过批评者论点与它看到的头条 | "Our AI just proposed a trade. Our own risk gate killed it. This is NorthStar — the trading copilot that argues with itself, on the record." |
-| 0:25 | /start 向导连拍：输入 "grow $100k to $110k in 12 months" → 计划步概率/区间/SPY 对照 → 再输一个离谱目标 → 红色拒绝路径 | "You don't pick stocks. You set a destination — it answers with honest odds. And when the goal is fantasy, it refuses, and shows what would actually work." |
+| 0:25 | /start 向导连拍：输入 "grow $1M to $1.1M in 12 months" → 计划步概率/区间/SPY 对照 → 疯狂目标镜头：只改两个字段，target $10,000,000、horizon 6 个月（10 倍）→ 红色拒绝路径 + 诚实替代方案 | "You don't pick stocks. You set a destination — it answers with honest odds. That one sentence is the last instruction it ever needs. Then we ask it to 10x the account in six months. It refuses — with numbers — and shows the nearest goal that would actually work." |
 | 0:55 | 切 Activity 页：**Scout report** 表特写（Top-K 行 + 每条人话理由 + 期权观察脚注行）→ 切 Track 页 Today 简报（金边 FieldNote）一瞥 | "And it hunts for its own opportunities: every night a scout scans the whole market and files a report — every pick with a reason, every morning a plain-words brief. The system re-targets itself while you sleep." |
 | 1:10 | Activity 页 Controls 点 "Run one pass now" → Live run schematic 节点逐个点亮（指出 scout 卫星节点 + 衬线 Ai 签 vs CODE 签） | "Every 15 minutes an ADK workflow runs in the background. Nodes signed Ai are Gemini — they triage and explain. CODE nodes are deterministic — only code touches money." |
 | 1:50 | pass 落地：Event stream 滚出 proposal → verdict（理由码印章）→ digest；上滑 Market 面板看 TimesFM 分位带 + 成交箭头 | "Every decision lands in an append-only journal with reason codes. The chart shows our own fills, and TimesFM's five-day bands — advice, never a trigger." |
@@ -51,7 +57,7 @@ A2A curl（提前贴好）：
 | 0:20 | Proof 页 ledger 筛 order/fill：iron condor **一张原子 MLEG 单**下单与整结构平仓记录 | "Defined-risk spreads go out as one atomic multi-leg order — no legging risk, ever." |
 | 0:50 | 退出管理：50% 止盈 / DTE≤7 的 ledger 记录 + Track 持仓 Close 按钮演示 | "Exits are mechanical: half the credit captured, or seven days to expiry — whichever comes first." |
 | 1:20 | P&L 事件特写：exact vs labeled estimate 两种记账 + 连亏冷却计数 | "P&L is exact on our fills, and labeled as an estimate when expiry books it. Loss streaks feed a real cooldown." |
-| 1:50 | 风控快闪：Proof 页闸门拒绝统计（17 条 checks）+ 一条真实 rejection 印章 | "Seventeen pure-function checks. Every rejection is a journal event with a reason code." |
+| 1:50 | 风控快闪：Proof 页闸门拒绝统计（19 条 checks）+ 一条真实 rejection 印章 | "Nineteen pure-function checks. Every rejection is a journal event with a reason code." |
 | 2:10 | Activity 上下文条 regime 徽章特写 → System 页家族 regime 统计表（各族条件化 Sharpe，<120d 显示 insufficient）→ Track "Needs you" 里的 Advisor 倾斜建议 Adopt/Dismiss → System Factor mining 雷达一瞥 | "A deterministic compass classifies the regime, and shows how each strategy family actually performed in this weather — refusing conclusions under 120 days of evidence. When the regime is stable, the advisor proposes a bounded tilt. You decide; dismissed advice is still scored." |
 | 2:35 | 账户视角：Track hero（equity + 今日 P&L + 金航迹线）+ 持仓（用当天真实叙事，见下） | （按当天版本讲） |
 | 2:55 | 收尾 | "Paper account, real market, honest ledger. NorthStar on Alpaca." |
@@ -81,4 +87,4 @@ happens off the books."
 - Track hero：金航迹线 + ProbStrip 三刻度 + ✦ 目标星特写
 - 顶栏特写：equity/today KPI、金色进度尺、NY 时钟、PAPER 章
 - Proof ledger 长滚动（表现"账本厚度"，印章列齐整）
-- 终端 healthz + A2A curl 输出
+- 终端 A2A curl 输出（`<web-url>/a2a/weather/.well-known/agent-card.json`）

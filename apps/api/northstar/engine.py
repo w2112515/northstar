@@ -19,6 +19,7 @@ from northstar.broker import (
 )
 from northstar.compiler import compile_proposal
 from northstar.compiler.options import CompileError, occ_strike
+from northstar.earnings import prune_past
 from northstar.config import get_settings
 from northstar.domain import (
     Goal,
@@ -35,6 +36,7 @@ from northstar.exits import plan_exits
 from northstar.gate import GateSnapshot, run_gate
 from northstar.journal import get_store
 from northstar.locks import APPROVAL_LOCK, PASS_LOCK
+from northstar.notify import notify_approval
 from northstar.strategies import analyst as analyst_prog
 from northstar.strategies import catalog_entry
 from northstar.strategies import dsl_rotation as dsl_prog
@@ -56,6 +58,7 @@ PROGRAMS = {
     "bull_put_spread": spreads_prog.propose,
     "bear_call_spread": spreads_prog.propose,
     "iron_condor": spreads_prog.propose,
+    "bull_call_spread": spreads_prog.propose,
     # equities
     "momentum_rotation": momentum_prog.propose,
     "rsi_mean_reversion": meanrev_prog.propose,
@@ -177,6 +180,78 @@ def ensure_default_instances(store) -> list[StrategyInstance]:
 
 # --------------------------------------------------------------------------- snapshot
 
+def exposure_and_stock_qty(
+    positions: list[dict[str, Any]],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Per-underlying deployed capital (stock value + short-put collateral +
+    option market value) and per-symbol stock quantity. One definition,
+    shared by the gate snapshot and the cockpit's risk readout."""
+    exposure: dict[str, float] = {}
+    stock_qty: dict[str, float] = {}
+    for p in positions:
+        und = _underlying_of(p["symbol"])
+        if p["asset_class"] == "us_equity":
+            exposure[und] = exposure.get(und, 0.0) + abs(p["market_value"])
+            stock_qty[und] = stock_qty.get(und, 0.0) + p["qty"]
+        elif p["asset_class"] == "us_option":
+            if p["qty"] < 0 and p["symbol"][-9] == "P":
+                exposure[und] = exposure.get(und, 0.0) + occ_strike(p["symbol"]) * 100 * abs(p["qty"])
+            else:
+                exposure[und] = exposure.get(und, 0.0) + abs(p["market_value"])
+    return exposure, stock_qty
+
+
+def deployed_risk(positions: list[dict[str, Any]]) -> float:
+    """Whole-book capital at risk, structure-aware.
+
+    Stocks count at market value, defined-risk option structures at their real
+    max loss (width - entry credit), lone short puts at cash-secured collateral.
+    This is the number the gate's portfolio_deployed_cap checks - unlike the
+    concentration map, hedged wings must NOT be booked as naked collateral, or
+    one SPY spread would "fill" the whole account.
+    """
+    from northstar.exits import _classify, _group_structures, occ_type
+
+    total = sum(abs(p["market_value"]) for p in positions if p["asset_class"] == "us_equity")
+    for legs in _group_structures(positions):
+        classified = _classify(legs)
+        shape = classified[0] if classified else None
+        if shape in ("vertical", "condor"):
+            contracts = min(abs(float(l["qty"])) for l in legs)
+            entry = 0.0
+            have_entries = True
+            for l in legs:
+                e = l.get("avg_entry_price")
+                if not e:
+                    have_entries = False
+                    break
+                entry += (1.0 if float(l["qty"]) < 0 else -1.0) * float(e)
+            put_strikes = sorted(occ_strike(l["symbol"]) for l in legs if occ_type(l["symbol"]) == "P")
+            call_strikes = sorted(occ_strike(l["symbol"]) for l in legs if occ_type(l["symbol"]) == "C")
+            width = max(
+                put_strikes[-1] - put_strikes[0] if len(put_strikes) >= 2 else 0.0,
+                call_strikes[-1] - call_strikes[0] if len(call_strikes) >= 2 else 0.0,
+            )
+            # credit structure: risk = width - credit; debit structure (net
+            # entry < 0): risk = the debit paid; missing entries: full width
+            if not have_entries:
+                risk_per_share = width
+            elif entry >= 0:
+                risk_per_share = max(width - entry, 0.0)
+            else:
+                risk_per_share = -entry
+            total += min(risk_per_share, width) * 100 * contracts
+        else:
+            # lone shorts, odd shapes, long-only: short puts at collateral,
+            # everything else at |market value| - conservative on purpose
+            for l in legs:
+                if float(l["qty"]) < 0 and occ_type(l["symbol"]) == "P":
+                    total += occ_strike(l["symbol"]) * 100 * abs(float(l["qty"]))
+                else:
+                    total += abs(float(l.get("market_value") or 0.0))
+    return total
+
+
 def _orders_sent_today(store) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
     return sum(1 for ev in store.events(kinds=["order"], limit=500)
@@ -193,18 +268,7 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
     # book expiries/assignments/manual closes that happened since the last pass
     reconcile_vanished(store, positions)
 
-    exposure: dict[str, float] = {}
-    stock_qty: dict[str, float] = {}
-    for p in positions:
-        und = _underlying_of(p["symbol"])
-        if p["asset_class"] == "us_equity":
-            exposure[und] = exposure.get(und, 0.0) + abs(p["market_value"])
-            stock_qty[und] = stock_qty.get(und, 0.0) + p["qty"]
-        elif p["asset_class"] == "us_option":
-            if p["qty"] < 0 and p["symbol"][-9] == "P":
-                exposure[und] = exposure.get(und, 0.0) + occ_strike(p["symbol"]) * 100 * abs(p["qty"])
-            else:
-                exposure[und] = exposure.get(und, 0.0) + abs(p["market_value"])
+    exposure, stock_qty = exposure_and_stock_qty(positions)
 
     plan, goal = active_plan(store)
     weather = get_weather(store)
@@ -229,6 +293,9 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
         weather_score=weather.get("score") if weather else None,
         sleeve_budget_by_family=sleeve_budget,
         sleeve_exposure_by_family=sleeve_exposure,
+        earnings_by_underlying=prune_past(store),
+        today_iso=datetime.now(timezone.utc).date().isoformat(),
+        deployed_risk=deployed_risk(positions),
     )
     return ctx, snap, clock
 
@@ -238,12 +305,18 @@ def build_context_and_snapshot(store) -> tuple[EngineContext, GateSnapshot, dict
 def load_instances_and_bars(store, ctx: EngineContext) -> list[StrategyInstance]:
     """Active strategy instances + the daily bars their programs need."""
     from northstar.scout import options_watch_symbols, scout_recent_pool, scout_symbols
+    from northstar.watchlist import manual_history, manual_symbols
 
     instances = [i for i in ensure_default_instances(store) if i.enabled and i.status in ("champion", "trial")]
     ctx.scout_symbols = scout_symbols(store)
     ctx.scout_recent_pool = scout_recent_pool(store)
+    ctx.manual_symbols = manual_symbols(store)
+    ctx.manual_history = manual_history(store)
     ctx.options_watch = options_watch_symbols(store)
-    bar_symbols: list[str] = list(ctx.scout_symbols) + list(ctx.scout_recent_pool) + list(ctx.options_watch)
+    bar_symbols: list[str] = (
+        list(ctx.scout_symbols) + list(ctx.scout_recent_pool)
+        + list(ctx.manual_symbols) + list(ctx.options_watch)
+    )
     for inst in instances:
         bar_symbols += inst.params.get("universe", [])
         bar_symbols += inst.params.get("underlyings", [])
@@ -266,7 +339,7 @@ def collect_proposals(
             else DEFAULT_WEIGHTS.get(inst.family, 0.2)
         )
         if inst.status == "trial":
-            weight = min(weight, TRIAL_WEIGHT)  # paper-trial crews run small until they earn the helm
+            weight = min(weight, TRIAL_WEIGHT)  # paper trials run small until they earn champion
         if inst.family == "momentum_rotation":
             state = store.get("instance_state", inst.id) or {}
             if not momentum_prog.should_rebalance(state, int(inst.params.get("rebalance_days", 5))):
@@ -318,6 +391,19 @@ def process_proposal(
                      market_open, dry_run, execute_wait, summary)
 
 
+def _pending_duplicate(store, proposal: TradeProposal, order: OrderPlan) -> str | None:
+    """Id of a pending approval already asking the same question
+    (same underlying, same structure), else None."""
+    for doc in store.list("approvals"):
+        if doc.get("status") != "pending":
+            continue
+        if (doc.get("proposal") or {}).get("underlying") != proposal.underlying:
+            continue
+        if (doc.get("order_plan") or {}).get("strategy_type") == order.strategy_type:
+            return str(doc.get("id"))
+    return None
+
+
 def gate_and_execute(
     store,
     inst: StrategyInstance | None,
@@ -346,6 +432,14 @@ def gate_and_execute(
                 store.save("instance_state", inst.id,
                            {"last_rebalance": datetime.now(timezone.utc).isoformat()})
     elif verdict.verdict == "needs_human":
+        # One live card per question. While a needs_human condition persists
+        # (weather storm, soft breaker, cooldown), strategies re-propose the
+        # same trade every pass - without this check the human would get a
+        # fresh duplicate card every 15 minutes until the 12h expiry sweeper.
+        dup = _pending_duplicate(store, proposal, order)
+        if dup is not None:
+            summary["needs_human"].append(dup)
+            return
         approval = {
             "id": verdict.id,
             "created_at": verdict.created_at,
@@ -364,6 +458,9 @@ def gate_and_execute(
                 payload=approval, refs={"proposal_id": proposal.id, "verdict_id": verdict.id},
             )
         )
+        # Push to the operator's phone (fire-and-forget; timeout is the safety
+        # net, so a lost push costs convenience, never correctness).
+        notify_approval(order.human, verdict.reason_codes, guardrails.approval_timeout_hours)
     else:
         summary["rejected"].append({"proposal_id": proposal.id, "codes": verdict.reason_codes})
 

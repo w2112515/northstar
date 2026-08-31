@@ -1,4 +1,4 @@
-"""Helm advisor: bounded tilts, hysteresis/cooldown, decide paths, and the
+"""Plan advisor: bounded tilts, hysteresis/cooldown, decide paths, and the
 counterfactual ledger that scores dismissed advice too."""
 
 from datetime import datetime, timedelta, timezone

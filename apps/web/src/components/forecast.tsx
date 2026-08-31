@@ -33,7 +33,15 @@ export function ForecastFan({
   const symbols = doc ? Object.keys(doc.symbols) : [];
   const [sel, setSel] = useState<string>("");
   const active = sel && symbols.includes(sel) ? sel : symbols[0] ?? "";
-  if (!available && !doc) return null;
+  // Honest offline state instead of silently vanishing and leaving the panel
+  // header pointing at nothing.
+  if (!available && !doc) {
+    return (
+      <p className="text-sm text-mist">
+        Forecaster offline - TimesFM is not available in this environment, so no bands are drawn.
+      </p>
+    );
+  }
 
   const f = doc && active ? doc.symbols[active] : null;
   const rows = f
@@ -57,7 +65,7 @@ export function ForecastFan({
               key={s}
               onClick={() => setSel(s)}
               aria-pressed={s === active}
-              className={`rounded-sm px-2 py-0.5 font-mono text-micro transition-colors ${
+              className={`min-h-9 rounded-sm px-2 py-0.5 font-mono text-micro transition-colors md:min-h-6 ${
                 s === active ? "bg-panel text-ink" : "text-mist hover:text-ink"
               }`}
             >
@@ -79,7 +87,7 @@ export function ForecastFan({
           <>
             <div className="h-44 rounded-lg bg-void/50 p-2">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
+                <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }} accessibilityLayer={false}>
                   <XAxis dataKey="day" tick={AXIS_TICK} tickLine={false} axisLine={false} />
                   <YAxis
                     domain={["auto", "auto"]}
@@ -101,7 +109,9 @@ export function ForecastFan({
                   />
                   <Area dataKey="band" stroke="none" fill={CHART.signal} fillOpacity={0.14} isAnimationActive={false} />
                   <Line dataKey="q50" stroke={CHART.mist} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
-                  <Line dataKey="point" stroke={CHART.gold} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+                  {/* signal, not gold: gold is reserved for real money and the
+                      destination - a model guess must not wear the fact color */}
+                  <Line dataKey="point" stroke={CHART.signal} strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

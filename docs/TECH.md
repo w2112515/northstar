@@ -69,6 +69,10 @@ flowchart TB
 股票策略：pandas 向量回测全历史（IEX 日线，4 年，5bps 成本，walk-forward OOS 决策）。
 期权策略：**Alpaca 期权历史数据自 2024-02 起**（[官方文档](https://docs.alpaca.markets/us/docs/historical-option-data)，indicative 源，免费档延迟 15 分钟）——2024-02 之后用真实数据回测；更早期间用标的 OHLC + Black-Scholes 近似估权利金（到期 payoff 精确、中途 mark 近似、IV 用常数或 VIX 代理），**所有近似在报告中显式标注**。EOD 策略对 15 分钟延迟不敏感（声明）。
 
+*D3 复核（2026-08-31，触发：是否改用公认专业回测框架）——维持自研核心，理由更强了。* 2026 年格局：backtrader 自 2023 冻结（排除）；vectorbt 开源版进维护模式、活跃开发在付费闭源 PRO（~$25/mo）；NautilusTrader 是唯一活跃的生产级引擎，但其价值在事件驱动的成交仿真与 backtest→live 同码（日线股票策略场景公认"机器多于问题"），迁移=按它的数据模型重写全部策略与 evolution/DSL/weather 管线，且数字漂移会打断已存实验分数与晋级门的可比性。本系统的"专业性"在方法论层且已实现：walk-forward 无 OOS 调参、Bailey-López de Prado 缩水 Sharpe、换手成本、SPY 基线、诚实 data_note。执行仿真层只需日线 close-to-close + bps 成本，~300 行 pandas 已覆盖并有 characterization tests。针对性优化（同日落地）：`monte_carlo_goal` 从 iid 抽样升级为 **Politis-Romano 平稳块抽样**（mean block 3 个月，`mean_block=1` 即退化为旧 iid 行为），目标概率不再低估连亏/连赢的序列风险；返回载荷新增 `method` 字段。失效条件（重开本决定）：转日内/实盘执行保真需求 → NautilusTrader；宇宙 >100 名或大规模参数扫描 → vectorbt PRO；期权全历史精确回测规模化 → 专用期权回测层。
+
+*执行约定声明（2026-08-31 专业审查补记）。* 全部股票族回测按**信号日收盘成交**约定计账（RSI 显式 `shift(1)`，momentum 以 `mom.iloc[i-1]` 定第 `i` 日权重——数学等价），无前视；实盘则是次日晨 mid 限价 + 90 秒不追单，两者之间存在隔夜漂移差与 mid 限价成交率损耗。该差异对日线慢信号量级很小，但方向上回测略乐观——解读回测数字时把它记在心里，不做数字修饰。
+
 **D4 · ADK 图（实现现状，2026-08-30）。**
 **TradingLoop = ADK 2.8 `Workflow` 七节点图**（perceive → prefilter → triage[Flash] → signals → compile_gate_execute → explain[Flash] → record），确定性步骤=function 节点，LLM 步骤在节点内调 google-genai 并带诚实降级（无 key 时 journal 标 `llm:false`）。人话日报由 explain 节点承担（原 DailyDigest 图并入）。EvolutionLoop 当前为确定性服务（提议→walk-forward→评分→审批），HITL 用产品自身的审批卡（超时=拒绝）而非阻塞式 workflow 断点——调度循环不能被人挂起 12 小时。若时间允许可把 Evolution 也包成第二个 ADK 图（叙事增强，非功能必需）。
 
@@ -162,10 +166,14 @@ hks30/
 │     │  └─ api/         # FastAPI 路由（engine/goal/loop/lab）
 │     └─ tests/          # gate/compiler/copy-lint
 ├─ docs/                 # PRODUCT / DESIGN / TECH / ROADMAP（活事实）
-└─ scripts/              # dev.ps1 / smoke.ps1 / deploy.ps1（Cloud Run ×2）
+└─ scripts/              # dev.ps1 / smoke.ps1 / deploy.ps1（Cloud Run 单服务双容器）
 ```
 
-运行入口：`scripts\dev.ps1`（API :8800 + Web :3000）；`scripts\smoke.ps1`；`scripts\deploy.ps1 -ProjectId ...`（先 API 后 Web，Web 以运行时 `API_BASE` 环境变量指向 API 服务）。
+运行入口：`scripts\dev.ps1`（API :8800 + Web :3000）；`scripts\smoke.ps1`；`scripts\deploy.ps1 -ProjectId ...`
+（Cloud Build 出两镜像 → 单 Cloud Run 服务双容器：web 入口 :8080 + api sidecar :8000，
+`API_BASE=http://127.0.0.1:8000` 走实例内 localhost。为何不是两个服务：Google Frontend
+对新服务主机名注册存在间歇性 bug——服务全绿但 run.app URL 永远 404，2026-08 实测中招，
+详见 SHIP_CHECKLIST 踩坑记录；单域名 sidecar 彻底绕开）。
 
 ## 7. 观测与验证
 
@@ -175,3 +183,23 @@ hks30/
 ## 8. 附录：实盘上钱前的毕业清单（黑客松不执行，防止范围蔓延）
 
 模拟盘 ≥ 4 周且净收益跑赢基线；零闸门违规、零重复单；审批流全链路演练（含超时与深夜通知）；被指派/行权路径实测；Alpaca live 期权等级审批完成；独立复核（他人重做关键判断）；小资金 + 每单人审起步。以上任一不满足，不迁移真实资金。
+
+## 9. 赛后多租户路线（架构已就位，赛前刻意不部署登录墙）
+
+赛前裁定：加 Clerk 登录会把评委挡在只读舱外，直接损害两条赛道的评审体验，
+所以多租户只铺路不上线。已就位的地基（都已在生产代码里跑）：
+
+- **存储按角色隔离**：Store 全接口（journal/state/goals/jobs/leases…）走
+  `{role}_` 前缀 collection，`ACCOUNT_ROLE` 即租户雏形——多租户 = role 从
+  枚举变成 user id，一行映射的变更面。
+- **单写者选举**：driver lease（local 锁文件 / Firestore 事务 CAS）保证每个
+  账户同时只有一个调度器在写；多租户下每租户一把租约，观察者实例照常只读。
+- **密钥不落盘**：Cloud Run Secret Manager `secretKeyRef` + VPS systemd
+  `LoadCredential`，每租户的券商密钥天然是独立 secret 条目。
+- **每账户守护独立**：Guardrails/断路器/sleeve 预算全部挂在 goal/plan 文档
+  上，本来就是 per-account 语义。
+
+赛后三步：(1) Clerk 接 Next.js 中间件，session → role 映射注入 API 网关头；
+(2) FastAPI 依赖注入按请求解析 role，替换现在的进程级 `get_settings().account_role`；
+(3) 调度器从"单进程单角色"改为"job 表按租户分片 + 每租户租约"，任务表与
+幂等键已带全量语义，无需重写。

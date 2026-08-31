@@ -5,6 +5,7 @@
  *  you watch flash once. The full record lives on the Journal page. */
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { fmtTs } from "@/lib/api";
 import { Badge, eventTone } from "@/components/ui";
 import type { JEvent } from "@/lib/types";
@@ -20,7 +21,12 @@ export function LiveFeed({ events, oneCol = false }: { events: JEvent[]; oneCol?
 
   return (
     <section className="panel min-w-0 p-4">
-      <div className="kicker">Live feed</div>
+      <div className="flex items-center justify-between">
+        <span className="kicker">Live feed</span>
+        <Link href="/journal" className="text-2xs text-signal hover:text-ink">
+          Journal →
+        </Link>
+      </div>
       {events.length === 0 ? (
         <p className="mt-3 text-sm text-mist">
           Quiet. The first pass will write here.
@@ -32,13 +38,16 @@ export function LiveFeed({ events, oneCol = false }: { events: JEvent[]; oneCol?
             return (
               <li
                 key={ev.id}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${
+                className={`flex items-start gap-2 rounded-md px-2 py-1.5 ${
                   isNew ? "animate-feed-in" : ""
                 }`}
                 style={isNew ? { animationDelay: `${Math.min(i, 6) * 40}ms` } : undefined}
               >
                 <Badge tone={eventTone(ev)}>{ev.kind}</Badge>
-                <span className="min-w-0 flex-1 truncate text-xs text-ink">{ev.human || "(event)"}</span>
+                {/* two lines, not one truncated: the feed's job is the story */}
+                <span className="line-clamp-2 min-w-0 flex-1 text-xs leading-snug text-ink">
+                  {ev.human || "(event)"}
+                </span>
                 <span className="num shrink-0 text-micro text-mist">{fmtTs(ev.ts)}</span>
               </li>
             );

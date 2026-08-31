@@ -11,7 +11,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { OctagonX, Play } from "lucide-react";
 import { apiPost, fmtPct, fmtUsd } from "@/lib/api";
 import { useApi, useRefreshBridge } from "@/lib/data";
-import { Button, NorthStarMark, PaperBadge, Switch } from "@/components/ui";
+import { Button, NorthStarMark, PaperBadge, Switch, useTweenNumber } from "@/components/ui";
 import type { CompassDoc, EngineState, Position, Weather } from "@/lib/types";
 
 const NAV = [
@@ -84,15 +84,19 @@ function Sep() {
 /** Controls strip: Overview page only. */
 function Controls({ state }: { state: EngineState | null }) {
   const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
   const autopilot = useApi<{ autopilot: boolean }>("/api/loop/status", 15000).data?.autopilot ?? false;
 
   async function act(label: string, fn: () => Promise<unknown>) {
     setBusy(label);
     try {
       await fn();
+      setErr("");
       window.dispatchEvent(new Event("northstar:refresh"));
     } catch {
-      // the next poll repaints truth; nothing to repair here
+      // The next poll repaints truth, but "your command did not land" must be
+      // said out loud - especially for the kill switch.
+      setErr(`"${label === "tick" ? "Run one pass" : label === "kill" ? "Kill switch" : "Autopilot"}" did not go through - API unreachable or refused.`);
     } finally {
       setBusy("");
     }
@@ -101,54 +105,61 @@ function Controls({ state }: { state: EngineState | null }) {
   const blocked = state?.kill_switch ?? false;
 
   return (
-    <section
-      aria-label="Controls"
-      className="flex items-center gap-2 overflow-x-auto border-b border-line px-3 py-1.5 md:gap-3 md:px-4"
-    >
-      <label className="flex min-h-11 shrink-0 items-center gap-2 text-sm text-ink md:min-h-9">
-        <Switch
-          checked={autopilot}
-          disabled={blocked || busy !== ""}
-          onChange={(v) => act("autopilot", () => apiPost("/api/loop/autopilot", { on: v }))}
-          label="Autopilot"
-        />
-        <span>
-          Auto<span className="hidden sm:inline">pilot</span>
-        </span>
-      </label>
-      <Button
-        size="sm"
-        variant="signal"
-        className="min-h-11 shrink-0 md:min-h-9"
-        disabled={blocked || busy !== ""}
-        onClick={() => act("tick", () => apiPost("/api/loop/tick", { reason: "manual" }))}
+    <>
+      <section
+        aria-label="Controls"
+        className="flex items-center gap-2 overflow-x-auto border-b border-line px-3 py-1.5 md:gap-3 md:px-4"
       >
-        <Play className="size-3.5" />
-        {busy === "tick" ? "Passing…" : "Run one pass"}
-      </Button>
-      {!state?.clock.is_open && (
-        <span className="hidden shrink-0 text-2xs text-signal sm:inline">closed - orders queue</span>
-      )}
-      <div className="ml-auto shrink-0">
+        <label className="flex min-h-11 shrink-0 items-center gap-2 text-sm text-ink md:min-h-9">
+          <Switch
+            checked={autopilot}
+            disabled={blocked || busy !== ""}
+            onChange={(v) => act("autopilot", () => apiPost("/api/loop/autopilot", { on: v }))}
+            label="Autopilot"
+          />
+          <span>
+            Auto<span className="hidden sm:inline">pilot</span>
+          </span>
+        </label>
         <Button
           size="sm"
-          variant={state?.kill_switch ? "quiet" : "danger"}
-          className="min-h-11 md:min-h-9"
-          disabled={busy !== "" || !state}
-          onClick={() =>
-            act("kill", () => apiPost("/api/engine/kill-switch", { on: !state?.kill_switch }))
-          }
+          variant="signal"
+          className="min-h-11 shrink-0 md:min-h-9"
+          disabled={blocked || busy !== ""}
+          onClick={() => act("tick", () => apiPost("/api/loop/tick", { reason: "manual" }))}
         >
-          <OctagonX className="size-3.5" />
-          {state?.kill_switch ? "Release kill switch" : "Kill switch"}
+          <Play className="size-3.5" />
+          {busy === "tick" ? "Passing…" : "Run one pass"}
         </Button>
-      </div>
-    </section>
+        {!state?.clock.is_open && (
+          <span className="hidden shrink-0 text-2xs text-signal sm:inline">closed - orders queue</span>
+        )}
+        <div className="ml-auto shrink-0">
+          <Button
+            size="sm"
+            variant={state?.kill_switch ? "quiet" : "danger"}
+            className="min-h-11 md:min-h-9"
+            disabled={busy !== "" || !state}
+            onClick={() =>
+              act("kill", () => apiPost("/api/engine/kill-switch", { on: !state?.kill_switch }))
+            }
+          >
+            <OctagonX className="size-3.5" />
+            {state?.kill_switch ? "Release kill switch" : "Kill switch"}
+          </Button>
+        </div>
+      </section>
+      {err && (
+        <p role="alert" className="border-b border-line bg-coral-dim px-3 py-1.5 text-xs text-coral md:px-4">
+          {err}
+        </p>
+      )}
+    </>
   );
 }
 
 /** Kill switch / circuit breaker banners - global, above every page. */
-function StateBanners({ state }: { state: EngineState | null }) {
+function StateBanners({ state, pathname }: { state: EngineState | null; pathname: string }) {
   if (!state) return null;
   const soft = state.plan?.guardrails?.breaker_soft_dd ?? -0.08;
   const hard = state.plan?.guardrails?.breaker_hard_dd ?? -0.12;
@@ -161,6 +172,14 @@ function StateBanners({ state }: { state: EngineState | null }) {
       {state.kill_switch && (
         <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           Kill switch engaged - trading is stopped. No new risk.
+          {pathname !== "/" && (
+            <>
+              {" "}
+              <Link href="/" className="underline underline-offset-2 hover:text-ink">
+                Release it from Overview →
+              </Link>
+            </>
+          )}
         </div>
       )}
       {!state.kill_switch && breaker === "hard" && (
@@ -183,6 +202,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useRefreshBridge();
 
   const state = useApi<EngineState>("/api/engine/state", 15000).data ?? null;
+  const kpiEquity = useTweenNumber(state?.account.equity ?? 0);
+  const kpiDayPnl = useTweenNumber(state?.day_pnl_pct ?? 0);
   const weather = useApi<{ weather: Weather }>("/api/weather", 60000).data?.weather ?? null;
   const regime =
     useApi<{ compass: CompassDoc | null }>("/api/compass", 5 * 60000).data?.compass?.regime ?? null;
@@ -194,7 +215,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-hidden bg-void text-ink">
+    // overflow-x must be `clip`, never `hidden`: hidden forces overflow-y to
+    // compute as auto, which turns this div into the sticky containing block
+    // and silently kills every position:sticky descendant (topbar, KPI strip,
+    // journal date headers). clip crops without creating a scroll container.
+    <div className="flex min-h-dvh flex-col overflow-x-clip bg-void text-ink">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-panel focus:px-3 focus:py-2 focus:text-sm focus:text-signal"
@@ -218,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   href={n.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "relative text-2xs tracking-wide transition-colors duration-150",
+                    "relative text-sm transition-colors duration-150",
                     active ? "text-ink" : "text-mist hover:text-ink",
                   )}
                 >
@@ -251,14 +276,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-3 py-2 md:px-4">
           {state ? (
             <>
-              <Kpi label="Equity">{fmtUsd(state.account.equity, 0)}</Kpi>
+              <Kpi label="Equity">{fmtUsd(kpiEquity, 0)}</Kpi>
               <Sep />
               <Kpi
                 label="Day P/L"
                 tone={state.day_pnl_pct >= 0 ? "text-teal" : "text-coral"}
               >
                 {state.day_pnl_pct >= 0 ? "+" : ""}
-                {fmtPct(state.day_pnl_pct, 2)}
+                {fmtPct(kpiDayPnl, 2)}
               </Kpi>
               <Sep />
               <Kpi label="Buying power">
@@ -270,31 +295,37 @@ export function AppShell({ children }: { children: ReactNode }) {
           ) : (
             <span className="text-2xs text-mist">syncing…</span>
           )}
-          {weather && (
-            <>
-              <Sep />
-              <Kpi label="wx">
+          {/* Honest placeholders: a KPI vanishing reads as a layout glitch,
+              a dash reads as "no reading yet". Strip item count stays put. */}
+          <Sep />
+          <Kpi label="wx">
+            {weather ? (
+              <>
                 {weather.score ?? "—"} <span className="text-mist">{weather.bucket}</span>
-              </Kpi>
-            </>
-          )}
-          {regime && regime.label !== "unknown" && (
-            <>
-              <Sep />
-              <Kpi label="Regime">
-                <span className="text-mist">{REGIME_SHORT[regime.label] ?? regime.label}</span>
-              </Kpi>
-            </>
-          )}
+              </>
+            ) : (
+              "—"
+            )}
+          </Kpi>
+          <Sep />
+          <Kpi label="Regime">
+            <span className="text-mist">
+              {regime && regime.label !== "unknown"
+                ? REGIME_SHORT[regime.label] ?? regime.label
+                : "—"}
+            </span>
+          </Kpi>
         </div>
 
         {pathname === "/" && <Controls state={state} />}
       </header>
 
       <main id="main" className="min-w-0 flex-1 px-3 py-3 md:px-4">
-        <StateBanners state={state} />
+        <StateBanners state={state} pathname={pathname} />
         <div className="min-w-0">{children}</div>
-        <footer className="mt-6 pb-1 text-center text-micro leading-relaxed text-mist/60">
+        {/* Compliance line: full-strength mist - mist/60 lands at 3.9:1, below
+            AA for the smallest type on the page. */}
+        <footer className="mt-6 pb-1 text-center text-micro leading-relaxed text-mist">
           Paper trading · live prices · historical odds, not a promise · not investment advice
         </footer>
       </main>

@@ -10,8 +10,10 @@ import { refreshAll, useApi } from "@/lib/data";
 import { Badge, Button, EmptyState, PageTitle, Panel, Skeleton } from "@/components/ui";
 import type { CatalogEntry, Instance } from "@/lib/types";
 
-const RISK_TONE = (risk: string): "teal" | "amber" | "coral" =>
-  risk.includes("low") ? "teal" : risk === "medium" ? "amber" : "coral";
+// medium risk is a fact, not a request for your attention - amber stays
+// reserved for "waiting on a human"
+const RISK_TONE = (risk: string): "teal" | "mist" | "coral" =>
+  risk.includes("low") ? "teal" : risk === "medium" ? "mist" : "coral";
 
 export default function Strategies() {
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,6 +59,9 @@ export default function Strategies() {
 
   const activeCount = catalog.filter((c) => activeByFamily.get(c.family)).length;
   const pausedCount = catalog.filter((c) => c.runnable && !activeByFamily.get(c.family)).length;
+  // Archived instances are history, not the live book - they read as
+  // contradictions here ("archived · enabled yes"). The journal keeps them.
+  const liveInstances = instances.filter((i) => i.status !== "archived");
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -77,7 +82,7 @@ export default function Strategies() {
       </div>
 
       {err && (
-        <div className="rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+        <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           {err}
         </div>
       )}
@@ -98,12 +103,21 @@ export default function Strategies() {
             return (
               <article
                 key={c.family}
+                // ring priority: champion (gold star moment) beats running
+                // (teal); "soon" cards keep readable text - only 20% dim
                 className={`panel flex flex-col p-4 ${
-                  !c.runnable ? "opacity-50" : running ? "shadow-tone-teal" : ""
+                  !c.runnable
+                    ? "opacity-80"
+                    : champion
+                      ? "shadow-tone-gold"
+                      : running
+                        ? "shadow-tone-teal"
+                        : ""
                 }`}
               >
-                <div className="kicker">{c.family.replace(/_/g, " ")}</div>
-                <div className="mt-1 flex items-center justify-between gap-2">
+                {/* no kicker: it used to repeat the name ("wheel" over
+                    "Wheel (income cycle)") and wasted a row on every card */}
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-ink">{c.name}</span>
                   {!c.runnable ? (
                     <Badge>soon</Badge>
@@ -139,24 +153,24 @@ export default function Strategies() {
       )}
 
       <Panel className="overflow-x-auto p-4">
-        <div className="kicker">Running instances</div>
+        <div className="kicker">Live instances</div>
         {!loaded ? (
           <Skeleton rows={4} className="mt-3" />
-        ) : instances.length === 0 ? (
-          <EmptyState title="No instances yet" body="Evolution candidates appear here once promoted." />
+        ) : liveInstances.length === 0 ? (
+          <EmptyState title="No live instances yet" body="Evolution candidates appear here once promoted." />
         ) : (
           <table className="mt-3 w-full min-w-lg text-left text-sm">
             <thead className="text-xs text-mist">
               <tr className="border-b border-line">
-                <th className="pb-2 font-medium">Family</th>
-                <th className="pb-2 font-medium">Version</th>
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 font-medium">Enabled</th>
-                <th className="pb-2 font-medium">Setup</th>
+                <th scope="col" className="pb-2 font-medium">Family</th>
+                <th scope="col" className="pb-2 font-medium">Version</th>
+                <th scope="col" className="pb-2 font-medium">Status</th>
+                <th scope="col" className="pb-2 font-medium">Enabled</th>
+                <th scope="col" className="pb-2 font-medium">Setup</th>
               </tr>
             </thead>
             <tbody>
-              {instances.map((i) => (
+              {liveInstances.map((i) => (
                 <tr key={i.id} className="border-b border-line/60 align-top">
                   <td className="py-2 pr-3 font-medium capitalize">{i.family.replace(/_/g, " ")}</td>
                   <td className="num py-2 pr-3 text-xs text-mist">{i.version}</td>

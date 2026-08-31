@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def new_id(prefix: str) -> str:
@@ -68,6 +68,7 @@ class Guardrails(BaseModel):
     approval_timeout_hours: int = 12       # HITL timeout => reject
     max_orders_per_day: int = 12           # rate limit: new orders per UTC day
     max_order_notional_pct: float = 0.10   # single equity order <= this share of equity
+    portfolio_deployed_cap: float = 0.90   # whole book: total deployed capital <= this share of equity
     weather_floor: int = 20                # market weather below this -> new risk needs approval
     exit_profit_take_pct: float = 0.50     # close short premium once this share of credit is captured
     exit_dte: int = 7                      # close option structures at/below this DTE (gamma/assignment)
@@ -77,6 +78,15 @@ class PlanAllocation(BaseModel):
     strategy_id: str
     weight: float
     why: str = ""
+
+
+class Alternative(BaseModel):
+    """One honest alternative for a red/yellow goal: what to say, plus - when
+    the numbers are concrete - which goal fields a single tap would change.
+    Empty changes = advice without a button."""
+
+    text: str
+    changes: dict[str, float] = Field(default_factory=dict)  # target_amount | horizon_months | capital_base
 
 
 class Plan(BaseModel):
@@ -90,8 +100,17 @@ class Plan(BaseModel):
     allocations: list[PlanAllocation]
     guardrails: Guardrails
     baseline_note: str = ""                # honest comparison vs SPY DCA
-    honest_alternatives: list[str] = Field(default_factory=list)  # filled when red
+    honest_alternatives: list[Alternative] = Field(default_factory=list)  # filled when red
     status: Literal["proposed", "active", "halted"] = "proposed"
+
+    @field_validator("honest_alternatives", mode="before")
+    @classmethod
+    def _coerce_alternatives(cls, v: Any) -> Any:
+        # Plans stored before 8/31 carried plain strings; both live instances
+        # still hold such docs, so loading them must keep working.
+        if isinstance(v, list):
+            return [{"text": a} if isinstance(a, str) else a for a in v]
+        return v
 
 
 # --------------------------------------------------------------------------- trading

@@ -77,6 +77,47 @@ def test_cooldown_needs_human():
     assert "COOLDOWN" in v.reason_codes
 
 
+def test_earnings_blackout_blocks_short_premium():
+    # AMD reports 2026-09-05; the short put lives until 2026-09-18 -> step aside
+    v = run_gate(csp_order(), csp_proposal(),
+                 snap(earnings_by_underlying={"AMD": "2026-09-05"}, today_iso="2026-08-31"), G)
+    assert v.verdict == "rejected"
+    assert "EARNINGS_BLACKOUT" in v.reason_codes
+
+
+def test_earnings_after_expiry_is_fine():
+    v = run_gate(csp_order(), csp_proposal(),
+                 snap(earnings_by_underlying={"AMD": "2026-10-05"}, today_iso="2026-08-31"), G)
+    assert v.verdict == "approved"
+
+
+def test_earnings_no_data_passes_and_says_so():
+    v = run_gate(csp_order(), csp_proposal(), snap(today_iso="2026-08-31"), G)
+    assert v.verdict == "approved"
+    row = next(c for c in v.checks if c.rule == "earnings_blackout")
+    assert row.actual == "no data" and row.passed
+
+
+def test_earnings_never_blocks_closing():
+    order = csp_order()
+    order.meta["closing"] = True
+    v = run_gate(order, csp_proposal(),
+                 snap(earnings_by_underlying={"AMD": "2026-09-05"}, today_iso="2026-08-31"), G)
+    assert "EARNINGS_BLACKOUT" not in v.reason_codes
+
+
+def test_portfolio_deployed_cap_blocks_stacking():
+    # book already risks $80k; +$17k CSP collateral tops the 90% whole-book cap
+    v = run_gate(csp_order(), csp_proposal(), snap(deployed_risk=80_000.0), G)
+    assert v.verdict == "rejected"
+    assert "PORTFOLIO_BUDGET_EXCEEDED" in v.reason_codes
+
+
+def test_portfolio_cap_allows_a_normal_book():
+    v = run_gate(csp_order(), csp_proposal(), snap(deployed_risk=40_000.0), G)
+    assert v.verdict == "approved"
+
+
 def test_naked_call_forbidden():
     order = OrderPlan(
         proposal_id="tp_x", strategy_type="covered_call",

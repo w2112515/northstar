@@ -114,7 +114,7 @@ export default function Journal() {
       />
 
       {err && (
-        <div className="rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+        <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           {err}
         </div>
       )}
@@ -132,7 +132,7 @@ export default function Journal() {
             type="button"
             onClick={() => setKind(k)}
             aria-pressed={kind === k}
-            className={`h-9 rounded-full px-3 text-xs shadow-border transition-[color,background-color,box-shadow] duration-150 ${
+            className={`min-h-11 rounded-full px-3 text-xs shadow-border transition-[color,background-color,box-shadow] duration-150 md:min-h-9 ${
               kind === k ? "bg-panel text-ink" : "bg-night text-mist hover:text-ink"
             }`}
           >
@@ -151,7 +151,9 @@ export default function Journal() {
           <p className="mx-auto mt-3 max-w-md text-sm text-mist">
             {events.length === 0
               ? "Nothing on record yet. Run a pass from the controls strip - every proposal, verdict, and no from the gate will land here in plain English."
-              : "Nothing matches this filter. Try another kind or clear the search."}
+              : `Nothing matches this filter in the ${events.length} loaded entries.${
+                  maybeMore ? " Older history exists - Load older below widens the search." : ""
+                } Try another kind or clear the search.`}
           </p>
         </Panel>
       ) : (
@@ -170,7 +172,9 @@ export default function Journal() {
             }
             return (
             <section key={day}>
-              <div className="sticky top-14 z-10 mb-2 flex items-baseline justify-between bg-void/90 py-1.5 backdrop-blur-sm">
+              {/* offset = measured sticky header height on this page (topbar
+                  48 + KPI strip ~38); top-14 tucked the row under the bar */}
+              <div className="sticky top-[86px] z-10 mb-2 flex items-baseline justify-between bg-void/90 py-1.5 backdrop-blur-sm">
                 <h2 className="text-sm font-medium text-ink">{dayHeading(rows[0]!.ts)}</h2>
                 <span className="num text-micro text-mist">
                   {rows.length} entr{rows.length === 1 ? "y" : "ies"}

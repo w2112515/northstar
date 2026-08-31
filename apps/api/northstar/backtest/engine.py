@@ -254,7 +254,73 @@ def walk_forward_eval(
     }
 
 
+# --------------------------------------------------------------------------- slippage sensitivity
+
+# Effective cost per unit turnover, in bps of traded notional: a fees/adverse-
+# selection floor plus the share of a ~16bps quoted spread the order crosses.
+# "quarter_spread" (5bps) is the base case used everywhere else in the system.
+FILL_TIERS: dict[str, float] = {
+    "mid": 1.0,             # marketable limit fills at mid - optimistic
+    "quarter_spread": 5.0,  # crosses 25% of the spread - base case
+    "half_spread": 9.0,     # crosses half the spread (market orders) - pessimistic
+}
+
+
+def slippage_sensitivity(
+    bars: dict[str, pd.DataFrame],
+    params: dict,
+    family: str = "momentum_rotation",
+    oos_frac: float = 0.3,
+) -> dict:
+    """Same walk-forward, three fill assumptions.
+
+    The point is fragility detection: an edge that only exists when every fill
+    lands at mid is a liquidity subsidy, not a strategy. `fragile` flips True
+    when the base-case OOS Sharpe is positive but the pessimistic tier's is not.
+    """
+    rows = []
+    for tier, bps in FILL_TIERS.items():
+        ev = walk_forward_eval(bars, params, family=family, oos_frac=oos_frac, cost_bps=bps)
+        rows.append({
+            "assumption": tier,
+            "cost_bps": bps,
+            "oos": {k: ev["oos"].get(k) for k in ("ann_return", "sharpe", "max_dd", "n_days")},
+            "is": {k: ev["is"].get(k) for k in ("ann_return", "sharpe")},
+        })
+    base = next(r for r in rows if r["assumption"] == "quarter_spread")
+    worst = next(r for r in rows if r["assumption"] == "half_spread")
+    fragile = None
+    if base["oos"]["sharpe"] is not None and worst["oos"]["sharpe"] is not None:
+        fragile = bool(base["oos"]["sharpe"] > 0 and worst["oos"]["sharpe"] <= 0)
+    return {
+        "family": family,
+        "rows": rows,
+        "fragile": fragile,
+        "note": (
+            "Identical walk-forward run under three fill assumptions "
+            "(cost bps applied to turnover). OOS is the number that matters."
+        ),
+    }
+
+
 # --------------------------------------------------------------------------- Monte Carlo for goals
+
+def _stationary_bootstrap_idx(
+    n_obs: int, n_paths: int, months: int, mean_block: int, rng: np.random.Generator
+) -> np.ndarray:
+    """Politis-Romano stationary bootstrap index matrix (n_paths x months).
+
+    Each step either continues the current historical run (wrapping) or jumps
+    to a fresh random start with probability 1/mean_block. mean_block=1 makes
+    every step a fresh start - exactly the plain iid bootstrap."""
+    idx = np.empty((n_paths, months), dtype=np.int64)
+    idx[:, 0] = rng.integers(0, n_obs, size=n_paths)
+    p = 1.0 / max(mean_block, 1)
+    for t in range(1, months):
+        fresh = rng.random(n_paths) < p
+        idx[:, t] = np.where(fresh, rng.integers(0, n_obs, size=n_paths), (idx[:, t - 1] + 1) % n_obs)
+    return idx
+
 
 def monte_carlo_goal(
     monthly_returns: pd.Series | list[float],
@@ -263,13 +329,18 @@ def monte_carlo_goal(
     target_amount: float,
     n_paths: int = 4000,
     seed: int = 7,
+    mean_block: int = 3,
 ) -> dict:
-    """Bootstrap monthly returns -> P(final >= target) + percentile bands."""
+    """Bootstrap monthly returns -> P(final >= target) + percentile bands.
+
+    Stationary block bootstrap (mean block 3 months) instead of iid draws:
+    return runs and regime persistence survive the resample, so the bands do
+    not understate streak risk the way independent draws do."""
     r = np.asarray(pd.Series(monthly_returns).dropna(), dtype=float)
     if len(r) < 12 or months <= 0:
         return {"probability": None, "note": "insufficient history"}
     rng = np.random.default_rng(seed)
-    draws = rng.choice(r, size=(n_paths, months), replace=True)
+    draws = r[_stationary_bootstrap_idx(len(r), n_paths, months, mean_block, rng)]
     finals = capital * (1 + draws).prod(axis=1)
     paths_curve = capital * (1 + draws).cumprod(axis=1)
     pct = lambda q: np.percentile(paths_curve, q, axis=0).tolist()  # noqa: E731
@@ -284,4 +355,5 @@ def monte_carlo_goal(
         "band_p10": pct(10),
         "band_p50": pct(50),
         "band_p90": pct(90),
+        "method": f"stationary bootstrap, mean block {mean_block}mo, {n_paths} paths",
     }

@@ -115,7 +115,7 @@ def scout_report() -> dict:
 
 @router.get("/compass")
 def compass_state() -> dict:
-    """Market compass (regime + conditional stats) and helm-advisor state."""
+    """Market compass (regime + conditional stats) and plan-advisor state."""
     store = get_store()
     return {"compass": store.get("state", "compass"), "advisor": store.get("state", "advisor")}
 
@@ -128,7 +128,7 @@ def factor_ic() -> dict:
 
 @router.get("/report/daily")
 def daily_report(refresh: bool = False) -> dict:
-    """Markdown daily report (equity / trades / regime / scout / captain).
+    """Markdown daily report (equity / trades / regime / scout / day log).
     Built by the night watch; refresh=true rebuilds from current state."""
     from northstar.report import build_daily_report
 
@@ -156,7 +156,7 @@ class AdviceBody(BaseModel):
 
 @router.post("/advisor/decide")
 def advisor_decide(body: AdviceBody) -> dict:
-    """Adopt/dismiss the pending helm advice. Reweights the plan only - this
+    """Adopt/dismiss the pending plan advice. Reweights the plan only - this
     endpoint cannot place or approve orders (separate from the money path)."""
     from northstar.advisor import decide_advice
 
@@ -208,11 +208,23 @@ def forecast_now() -> dict:
 @router.get("/positions")
 def positions() -> dict:
     from northstar.broker import get_account_summary, get_open_orders, get_positions
+    from northstar.engine import DEFAULT_GUARDRAILS, active_plan, deployed_risk
 
+    account = get_account_summary()
+    pos = get_positions()
+    plan, _goal = active_plan(get_store())
+    cap_pct = (plan.guardrails if plan else DEFAULT_GUARDRAILS).portfolio_deployed_cap
+    equity = float(account.get("equity", 0.0))
     return {
-        "account": get_account_summary(),
-        "positions": get_positions(),
+        "account": account,
+        "positions": pos,
         "open_orders": get_open_orders(),
+        # whole-book risk readout: same math the gate's portfolio cap uses
+        "risk": {
+            "deployed": round(deployed_risk(pos), 2),
+            "cap": round(equity * cap_pct, 2),
+            "cap_pct": cap_pct,
+        },
     }
 
 
@@ -267,6 +279,75 @@ def market_bars(symbol: str, days: int = 130) -> dict:
         return {"symbol": sym, "bars": bars_rows(sym, days=min(max(days, 20), 500))}
     except Exception as e:
         return {"symbol": sym, "bars": [], "error": f"{type(e).__name__}: {e}"}
+
+
+@router.get("/market/quotes")
+def market_quotes(symbols: str) -> dict:
+    """Batched last/prev-close for the watchlist rail (read-only, cached)."""
+    from northstar.market_view import quotes_rows
+
+    syms = [s for s in symbols.split(",") if s.strip()]
+    try:
+        return {"quotes": quotes_rows(syms)}
+    except Exception as e:
+        return {"quotes": {}, "error": f"{type(e).__name__}: {e}"}
+
+
+class WatchBody(BaseModel):
+    symbol: str
+
+
+@router.get("/market/watch")
+def market_watch() -> dict:
+    """The user's pinned pool - names merged into equity strategy universes."""
+    from northstar.watchlist import manual_symbols
+
+    return {"symbols": manual_symbols(get_store())}
+
+
+@router.post("/market/watch")
+def market_watch_add(body: WatchBody) -> dict:
+    """Pin a ticker: validated, journaled, tradable by scout-enabled strategies."""
+    from northstar.watchlist import add_manual
+
+    return add_manual(get_store(), body.symbol)
+
+
+@router.delete("/market/watch/{symbol}")
+def market_watch_remove(symbol: str) -> dict:
+    """Unpin a ticker: held names stay tradable via pin history until exited."""
+    from northstar.watchlist import remove_manual
+
+    return remove_manual(get_store(), symbol)
+
+
+class EarningsBody(BaseModel):
+    symbol: str
+    date: str
+
+
+@router.get("/market/earnings")
+def market_earnings() -> dict:
+    """Known upcoming earnings dates - the gate's blackout calendar."""
+    from northstar.earnings import earnings_calendar
+
+    return {"symbols": earnings_calendar(get_store())}
+
+
+@router.post("/market/earnings")
+def market_earnings_set(body: EarningsBody) -> dict:
+    """Record an earnings date: new short premium on the name is blocked
+    through that date (closing positions is never blocked)."""
+    from northstar.earnings import set_earnings
+
+    return set_earnings(get_store(), body.symbol, body.date)
+
+
+@router.delete("/market/earnings/{symbol}")
+def market_earnings_clear(symbol: str) -> dict:
+    from northstar.earnings import remove_earnings
+
+    return remove_earnings(get_store(), symbol)
 
 
 @router.get("/market/fills")

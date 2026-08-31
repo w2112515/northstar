@@ -45,6 +45,12 @@ class GateSnapshot:
     frozen_symbols: list[str] = field(default_factory=list)  # per-name kill switch
     options_level: int = 0                 # account options approval (3 = multi-leg)
     weather_score: int | None = None       # market weather index 0-100; None = offline
+    # earnings calendar (manual, honest: empty = no data, checks pass and say so)
+    earnings_by_underlying: dict[str, str] = field(default_factory=dict)  # SYM -> ISO date
+    today_iso: str = ""                    # engine-injected UTC date for pure-function date math
+    # whole-book capital at risk (structure-aware: spreads at max loss, lone
+    # short puts at collateral, stock at value) - engine.deployed_risk()
+    deployed_risk: float = 0.0
     # equity rotation sleeves: family -> $ budget (weight*equity*slack) and
     # family -> current $ exposure across that family's trading universe
     sleeve_budget_by_family: dict[str, float] = field(default_factory=dict)
@@ -134,6 +140,21 @@ def run_gate(
         if not _check(checks, "options_level", ">=3 (multi-leg)", snap.options_level, ok):
             reasons.append("OPTIONS_LEVEL_TOO_LOW")
 
+    # 5c. earnings blackout: no NEW short premium through a known earnings date.
+    # Earnings are scheduled volatility events; premium sellers step aside.
+    # No calendar entry = the check passes and says so (honest, never guessed).
+    short_option_legs = [l for l in option_legs if l.side == "sell"]
+    if short_option_legs and not closing:
+        edate = snap.earnings_by_underlying.get(proposal.underlying.upper(), "")
+        if edate and snap.today_iso:
+            latest_exp = max(_occ_expiry_iso(l.symbol) for l in short_option_legs)
+            blocked = snap.today_iso <= edate <= latest_exp
+            if not _check(checks, "earnings_blackout",
+                          f"no earnings inside {snap.today_iso}..{latest_exp}", edate, not blocked):
+                reasons.append("EARNINGS_BLACKOUT")
+        else:
+            _check(checks, "earnings_blackout", "known earnings date", "no data", True)
+
     if not closing:
         # 6. no naked calls - covered call must be covered
         if order.strategy_type == "covered_call":
@@ -190,6 +211,16 @@ def run_gate(
                           f"${held + buy_notional:,.0f}", ok):
                 reasons.append("SLEEVE_BUDGET_EXCEEDED")
 
+        # 9d. whole-book deployment cap: capital already at risk (structure-
+        # aware, spreads at max loss) plus this trade. Per-name/per-family caps
+        # bound each sleeve; this is the backstop against correlated stacking.
+        if new_exposure > 0:
+            cap = snap.equity * g.portfolio_deployed_cap
+            ok = snap.deployed_risk + new_exposure <= cap
+            if not _check(checks, "portfolio_deployed_cap", f"${cap:,.0f}",
+                          f"${snap.deployed_risk + new_exposure:,.0f}", ok):
+                reasons.append("PORTFOLIO_BUDGET_EXCEEDED")
+
         # 10. max open positions
         ok = snap.open_positions_count < g.max_open_positions
         if not _check(checks, "max_open_positions", g.max_open_positions, snap.open_positions_count, ok):
@@ -233,6 +264,12 @@ def run_gate(
         reason_codes=reasons,
         decided_by="code",
     )
+
+
+def _occ_expiry_iso(symbol: str) -> str:
+    """OCC option symbol -> expiry as ISO date string (lexicographic-safe)."""
+    yymmdd = symbol[-15:-9]
+    return f"20{yymmdd[:2]}-{yymmdd[2:4]}-{yymmdd[4:6]}"
 
 
 def _is_duplicate(order: OrderPlan, underlying: str, open_order_symbols: list[str]) -> bool:

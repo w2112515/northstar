@@ -1,0 +1,6 @@
+[Unit]
+Description=NorthStar liveness check (oneshot, fired by timer)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/northstar/scripts/vps/monitor.sh

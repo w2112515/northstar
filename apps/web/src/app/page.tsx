@@ -10,8 +10,8 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { fmtTs, fmtUsd } from "@/lib/api";
 import { useApi } from "@/lib/data";
-import { Badge, Button, Panel, Skeleton } from "@/components/ui";
-import { GoalOrbit } from "@/components/orbit";
+import { Badge, Button, Panel, Skeleton, useTweenNumber } from "@/components/ui";
+import { GoalOrbit, StarfieldBackdrop } from "@/components/orbit";
 import { ProbStrip, TrajectoryHero } from "@/components/trajectory";
 import { MarketPanel, type WatchGroup } from "@/components/market";
 import { Pipeline } from "@/components/pipeline";
@@ -62,11 +62,11 @@ function TodaysBrief({
       );
     }
   }
-  // 02 - what needs a human
+  // 02 - what needs a human (imperative voice; no passive-waiting phrasing)
   items.push(
     approvals > 0
-      ? `${approvals} approval${approvals > 1 ? "s" : ""} waiting on your call - silence is an automatic no.`
-      : "Nothing waiting on you. The gate is working the book.",
+      ? `${approvals} approval${approvals > 1 ? "s" : ""} awaiting your call - silence is an automatic no.`
+      : "Nothing needs you. The gate is working the book.",
   );
   // 03 - the weather frame
   if (weather) {
@@ -79,25 +79,26 @@ function TodaysBrief({
     <Panel className="p-4">
       <div className="flex items-center gap-2">
         <span className="kicker">Today&apos;s brief</span>
-        {brief && (
-          <Badge tone={brief.log.narrator === "gemini" ? "gold" : "mist"}>
-            {brief.log.narrator === "gemini" ? "AI" : "system"}
-          </Badge>
-        )}
         {brief && <span className="num ml-auto text-micro text-mist">{fmtTs(brief.ts)}</span>}
       </div>
       <div className="mt-3 space-y-2.5">
         {items.map((line, i) => (
-          <p key={i} className="flex gap-2.5 text-2xs leading-relaxed text-mist">
-            <span className="num shrink-0 text-xs text-gold">{String(i + 1).padStart(2, "0")}</span>
+          <p key={i} className="flex gap-2.5 text-xs leading-relaxed text-mist">
+            {/* ink ordinals: gold is for star moments, not list numbering */}
+            <span className="num shrink-0 text-xs text-ink">{String(i + 1).padStart(2, "0")}</span>
             <span>{line}</span>
           </p>
         ))}
       </div>
       {brief && (
-        <p className="mt-3 line-clamp-3 border-t border-line pt-2.5 text-2xs leading-relaxed text-mist">
-          {brief.log.narrative}
-        </p>
+        <div className="mt-3 border-t border-line pt-2.5">
+          {/* the AI badge belongs to the narrative it attributes, not to the
+              panel - the numbered items above are template-built */}
+          <Badge tone={brief.log.narrator === "gemini" ? "gold" : "mist"} className="mb-1">
+            {brief.log.narrator === "gemini" ? "AI" : "system"}
+          </Badge>
+          <p className="line-clamp-3 text-xs leading-relaxed text-mist">{brief.log.narrative}</p>
+        </div>
       )}
     </Panel>
   );
@@ -140,54 +141,73 @@ function Hero({
   state,
   bands,
   equityCurve,
-  orbitMode,
+  orbitState,
 }: {
   state: EngineState;
   bands: BandsDoc | null;
   equityCurve: { t: string; equity: number }[];
   /** pass running / kill switch: the orbit takes the hero slot */
-  orbitMode: boolean;
+  orbitState: "idle" | "pass" | "kill";
 }) {
   const goal = state.goal!;
   const plan = state.plan;
-  const equity = state.account.equity;
+  const equity = useTweenNumber(state.account.equity);
   const target = goal.target_amount ?? bands?.target_amount ?? goal.capital_base;
   const base = goal.capital_base;
   const progress = Math.min(Math.max((equity - base) / Math.max(target - base, 1), 0), 1);
 
   // Days left, derived from data timestamps only (no wall clock in render).
+  // elapsed is clamped at 0 so a stale bands.start can't show more days left
+  // than the plan has.
   const totalDays = (goal.horizon_months ?? bands?.months ?? 12) * 30.44;
   const startMs = bands?.start ? Date.parse(bands.start) : NaN;
   const lastMs = equityCurve.length > 0 ? Date.parse(equityCurve[equityCurve.length - 1].t) : NaN;
   const elapsed =
-    Number.isFinite(startMs) && Number.isFinite(lastMs) ? (lastMs - startMs) / 86_400_000 : 0;
+    Number.isFinite(startMs) && Number.isFinite(lastMs)
+      ? Math.max(0, (lastMs - startMs) / 86_400_000)
+      : 0;
   const daysLeft = Math.max(0, Math.round(totalDays - elapsed));
 
   return (
-    <Panel className="flex flex-col justify-center gap-3 p-6">
-      {orbitMode ? (
+    <Panel className="relative flex flex-col justify-center gap-3 overflow-hidden p-6">
+      {orbitState !== "idle" ? (
         <>
           <div className="flex items-baseline justify-between">
             <span className="kicker">Equity</span>
             <span className="num text-sm text-mist">{fmtUsd(equity)}</span>
           </div>
+          {orbitState === "kill" && (
+            <div className="text-sm font-medium text-coral">
+              Stopped - no new risk until you release the kill switch.
+            </div>
+          )}
           <GoalOrbit start={base} equity={equity} target={target} odds={plan?.probability ?? 0} />
         </>
       ) : (
-        <div className="hero-num text-gold">{fmtUsd(equity)}</div>
+        <>
+          {/* idle keeps the night sky: a static, subdued constellation */}
+          <StarfieldBackdrop />
+          <div className="hero-num relative text-gold">{fmtUsd(equity)}</div>
+        </>
       )}
       {plan && (
         <>
-          <div className="text-sm font-medium uppercase tracking-[0.14em] text-ink">
-            {(plan.probability * 100).toFixed(0)}% probability of reaching {fmtUsd(target, 0)}
+          {/* odds are a star moment: the number wears gold (contract §2) */}
+          <div className="relative flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="num text-2xl font-medium text-gold">
+              {(plan.probability * 100).toFixed(0)}%
+            </span>
+            <span className="text-2xs font-medium uppercase tracking-[0.14em] text-mist">
+              probability of reaching {fmtUsd(target, 0)}
+            </span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-line">
+          <div className="relative h-1.5 overflow-hidden rounded-full bg-line">
             <div
               className="h-full rounded-full bg-gold transition-[width] duration-500"
-              style={{ width: `${Math.max(2, progress * 100)}%` }}
+              style={{ width: `${Math.max(0.5, progress * 100)}%` }}
             />
           </div>
-          <div className="flex justify-between font-mono text-micro text-mist">
+          <div className="relative flex justify-between font-mono text-micro text-mist">
             <span>{daysLeft} days left</span>
             <span>Pass line {fmtUsd(target, 0)}</span>
           </div>
@@ -208,9 +228,14 @@ export default function Overview() {
       ?.points ?? [];
   const approvalsQ = useApi<{ pending: Approval[] }>("/api/approvals", 20000);
   const approvals = approvalsQ.data?.pending ?? [];
-  const posQ = useApi<{ positions: Position[]; open_orders: OpenOrder[] }>("/api/positions", 20000);
+  const posQ = useApi<{
+    positions: Position[];
+    open_orders: OpenOrder[];
+    risk?: { deployed: number; cap: number; cap_pct: number };
+  }>("/api/positions", 20000);
   const positions = useMemo(() => posQ.data?.positions ?? [], [posQ.data]);
   const openOrders = posQ.data?.open_orders ?? [];
+  const risk = posQ.data?.risk ?? null;
   const feedQ = useApi<{ events: JEvent[] }>("/api/journal?limit=6", 20000);
   const feed = feedQ.data?.events ?? [];
   const trace =
@@ -242,6 +267,7 @@ export default function Overview() {
     : null;
   const debateEv = useApi<{ events: JEvent[] }>("/api/journal?kinds=debate&limit=1", 20000).data
     ?.events[0];
+  const pinnedDoc = useApi<{ symbols: string[] }>("/api/market/watch", 60000).data ?? null;
 
   // A failed query must never masquerade as an empty account.
   const err = stateQ.error
@@ -257,22 +283,28 @@ export default function Overview() {
       const u = und(p.symbol);
       if (!holdings.includes(u)) holdings.push(u);
     }
+    const pinned: string[] = [];
+    for (const s of pinnedDoc?.symbols ?? []) {
+      if (!holdings.includes(s) && !pinned.includes(s)) pinned.push(s);
+    }
+    const seen = (s: string) => holdings.includes(s) || pinned.includes(s);
     const radar: string[] = [];
     for (const c of scout?.candidates ?? []) {
-      if (!holdings.includes(c.symbol) && !radar.includes(c.symbol)) radar.push(c.symbol);
+      if (!seen(c.symbol) && !radar.includes(c.symbol)) radar.push(c.symbol);
     }
     const core: string[] = [];
     for (const s of Object.keys(forecastDoc?.symbols ?? {})) {
-      if (!holdings.includes(s) && !radar.includes(s) && !core.includes(s)) core.push(s);
+      if (!seen(s) && !radar.includes(s) && !core.includes(s)) core.push(s);
     }
-    if (!holdings.includes("SPY") && !radar.includes("SPY") && !core.includes("SPY")) core.push("SPY");
+    if (!seen("SPY") && !radar.includes("SPY") && !core.includes("SPY")) core.push("SPY");
     const groups: WatchGroup[] = [
       { label: "Holdings", symbols: holdings },
+      { label: "Pinned", symbols: pinned },
       { label: "Scout", symbols: radar.slice(0, 10) },
       { label: "Core", symbols: core },
     ];
     return { chartSymbols: groups.flatMap((g) => g.symbols), watchGroups: groups };
-  }, [positions, forecastDoc, scout]);
+  }, [positions, forecastDoc, scout, pinnedDoc]);
 
   if (!state) {
     return (
@@ -292,12 +324,16 @@ export default function Overview() {
   const goal = state.goal;
   const plan = state.plan;
   const passRunning = passProgress?.status === "running";
-  const orbitMode = passRunning || state.kill_switch;
+  const orbitState: "idle" | "pass" | "kill" = state.kill_switch
+    ? "kill"
+    : passRunning
+      ? "pass"
+      : "idle";
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {err && (
-        <div className="rounded-lg bg-amber-dim px-3 py-2 text-sm text-amber shadow-tone-amber">
+        <div className="rounded-lg bg-coral-dim px-3 py-2 text-sm text-coral shadow-tone-coral">
           {err}
         </div>
       )}
@@ -333,7 +369,7 @@ export default function Overview() {
 
           {/* center: hero + plan-vs-reality */}
           <div className="flex min-w-0 flex-col gap-3">
-            <Hero state={state} bands={bands} equityCurve={equityCurve} orbitMode={orbitMode} />
+            <Hero state={state} bands={bands} equityCurve={equityCurve} orbitState={orbitState} />
             {plan && (
               <Panel className="p-4">
                 <div className="mb-2 flex items-center justify-between">
@@ -368,7 +404,8 @@ export default function Overview() {
             <Panel className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="kicker">Agent pipeline</span>
-                {passRunning && <Badge tone="gold">pass running</Badge>}
+                {/* running = teal; gold would make routine work a celebration */}
+                {passRunning && <Badge tone="teal">pass running</Badge>}
               </div>
               <Pipeline
                 trace={trace}
@@ -400,6 +437,7 @@ export default function Overview() {
           positions={positions}
           openOrders={openOrders}
           marketOpen={state.clock.is_open}
+          risk={risk}
         />
       </div>
     </div>

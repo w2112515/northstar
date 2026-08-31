@@ -110,3 +110,20 @@ def test_missing_marks_skip_structure():
 
 def test_long_only_position_not_touched():
     assert plan_exits([opt("SPY261016P00740000", 1, 3.00, 0.50)], [], G, today=TODAY) == []
+
+
+def test_stacked_same_type_verticals_close_each_short_leg():
+    # two bull put spreads on one underlying+expiry: 2 shorts + 2 longs, all
+    # puts - not a condor. The fallback must close each short leg (the risk),
+    # leaving the paid-for long wings alone, never silently skip the group.
+    legs = [
+        opt("SPY261016P00760000", -1, 5.00, 1.50),
+        opt("SPY261016P00740000", 1, 3.00, 0.70),
+        opt("SPY261016P00750000", -1, 4.00, 1.20),
+        opt("SPY261016P00730000", 1, 2.00, 0.50),
+    ]
+    # net entry 5-3+4-2 = 4.00, current 1.5-0.7+1.2-0.5 = 1.50 -> captured 62.5%
+    pairs = plan_exits(legs, [], G, today=TODAY)
+    closed = sorted(o.legs[0].symbol for _, o in pairs)
+    assert closed == ["SPY261016P00750000", "SPY261016P00760000"]
+    assert all(o.legs[0].side == "buy" and len(o.legs) == 1 for _, o in pairs)

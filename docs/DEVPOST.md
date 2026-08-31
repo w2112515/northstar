@@ -157,25 +157,64 @@ Agentic UX is not chat. It's a live workflow graph, a debate you can replay,
 reason codes on every no, and an append-only journal — trust through audit,
 not through vibes.
 
+## The business (why this is a product, not a demo)
+
+**Who pays.** The 10M+ retail options traders stuck between two bad options:
+"AI signal" Discords that hide their misses, and DIY bots that need a quant
+degree. NorthStar's buyer is the person who wants autonomy *with receipts*.
+
+**Freemium wedge.**
+
+- **Free — the honest mirror.** Connect a paper account, state a goal, get the
+  odds verdict, watch the agent trade paper with full journal access. The
+  red-light moment ("your goal needs 1900%/yr — here's what would work") is
+  the shareable hook; honesty is the acquisition loop.
+- **Subscription ($29–49/mo) — the autonomous crew.** 24/7 driving of your
+  own brokerage account, evolution lab tuned to *your* goal, Telegram nudges
+  on approvals, slippage-aware tearsheets. Costs stay near-zero per user:
+  LLMs only narrate and hypothesize (cheap Flash calls), while every
+  correctness-critical path is deterministic code.
+- **Later — B2B.** The gate + journal is a compliance artifact: white-label
+  "explainable agent infrastructure" for fintechs that need to prove to a
+  regulator why their AI did (or refused) each trade.
+
+**Compliance route, three deliberate steps.**
+
+1. **Now (hackathon → beta):** paper-only. No real money, no advice claims —
+   the copy-honesty lint literally fails the build on promised returns.
+2. **Next:** execute through the user's own brokerage keys (Alpaca Broker
+   API / Connect), user retains custody and final approval; we operate as
+   software, not adviser — same pattern as tax software.
+3. **Then:** register or partner as RIA for the full-autonomy tier, where our
+   journal/gate architecture becomes the audit trail regulators ask for.
+
+**Moat.** Not the model (everyone has Gemini). It's the honesty dataset:
+every proposal, rejection, debate, and counterfactual we journal is training
+signal for calibration that competitors who only log wins can never rebuild.
+
 ## What's next
 
-Real-money readiness would demand a compliance layer (RIA/BD partnership),
-richer regime detection, and multi-account support. The honest-copilot pattern
-(LLM proposes, code disposes, journal remembers) generalizes beyond trading.
+Multi-tenancy is architecturally staged (role-prefixed store collections,
+driver-lease single-writer election, per-account guardrails already in) —
+post-hackathon we add Clerk auth + per-user roles; the route is written up in
+`docs/TECH.md`. Real-money readiness follows the compliance route above.
+The honest-copilot pattern (LLM proposes, code disposes, journal remembers)
+generalizes beyond trading.
 
 ## Links
 
-- Live demo (Cloud Run): [WEB_URL]
-- API health: [API_URL]/healthz · A2A agent card: [API_URL]/a2a/weather/.well-known/agent-card.json
+- Live demo (Cloud Run): https://northstar-web-251608445238.us-central1.run.app
+- A2A agent card: https://northstar-web-251608445238.us-central1.run.app/a2a/weather/.well-known/agent-card.json
 - Repo: [GITHUB_URL]
 - Video: [YOUTUBE_URL]
 
 ## 60-second judge verification path
 
-1. Open [WEB_URL] → cockpit loads with live paper equity in the status ribbon.
+1. Open https://northstar-web-251608445238.us-central1.run.app → cockpit loads
+   with live paper equity in the status ribbon.
 2. Helm → "Run one pass now" → watch the agent graph light up node by node.
 3. When the pass lands: Live feed shows proposal → verdict (reason codes) →
    digest in plain English. If the AI proposed anything, the Debate card shows
    the bull case, the bear case, and who won.
-4. `curl [API_URL]/a2a/weather/.well-known/agent-card.json` — a second agent
-   discovering our weather station over A2A.
+4. `curl https://northstar-web-251608445238.us-central1.run.app/a2a/weather/.well-known/agent-card.json`
+   — a second agent discovering our weather station over A2A.

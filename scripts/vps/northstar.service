@@ -1,0 +1,26 @@
+[Unit]
+Description=NorthStar competition trading agent (PA39, Alpaca hackathon)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/northstar/apps/api
+ExecStart=/root/.local/bin/uv run --frozen uvicorn northstar.api.app:app --host 0.0.0.0 --port 8800
+Restart=always
+RestartSec=5
+# uv needs HOME to find its python/cache dirs
+Environment=HOME=/root
+# Secrets arrive as root-only files (scripts/vps/install-creds.sh), surfaced to
+# the process under $CREDENTIALS_DIRECTORY; config.py reads them ahead of .env,
+# so real values never ride in deploy tarballs or unit files. Files always
+# exist (installer creates empty ones) - empty falls back to .env gracefully.
+LoadCredential=alpaca_api_key_competition:/etc/northstar/creds/alpaca_api_key_competition
+LoadCredential=alpaca_secret_key_competition:/etc/northstar/creds/alpaca_secret_key_competition
+LoadCredential=alpaca_api_key:/etc/northstar/creds/alpaca_api_key
+LoadCredential=alpaca_secret_key:/etc/northstar/creds/alpaca_secret_key
+LoadCredential=google_api_key:/etc/northstar/creds/google_api_key
+LoadCredential=northstar_admin_token:/etc/northstar/creds/northstar_admin_token
+
+[Install]
+WantedBy=multi-user.target

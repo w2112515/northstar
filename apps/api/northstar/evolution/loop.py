@@ -410,7 +410,7 @@ TRIAL_DAYS = 3
 
 
 def decide_evolution(experiment_id: str, approve: bool) -> dict[str, Any]:
-    """Approval no longer promotes directly: the candidate first sails a
+    """Approval no longer promotes directly: the candidate first runs a
     paper trial (small allocation, TRIAL_DAYS). finalize_trials() settles it."""
     store = get_store()
     doc = store.get("experiments", experiment_id)
@@ -454,7 +454,7 @@ def decide_evolution(experiment_id: str, approve: bool) -> dict[str, Any]:
         JournalEvent(
             kind="experiment",
             human=(
-                f"Approved to trial: {exp.family} {new_version} sails a {TRIAL_DAYS}-day paper trial "
+                f"Approved to trial: {exp.family} {new_version} runs a {TRIAL_DAYS}-day paper trial "
                 f"at reduced size (parent {exp.parent_version} benched, restored if the trial fails). "
                 f"Hypothesis: {exp.hypothesis}"
             ),
@@ -513,7 +513,7 @@ def finalize_trials(store) -> list[dict[str, Any]]:
                 store.save("experiments", exp_doc["id"], exp_doc)
             human = (
                 f"Trial failed: {inst.family} {inst.version} is archived ({', '.join(violations)} "
-                f"during its window). Parent version restored to the helm."
+                f"during its window). Parent version restored as champion."
             )
             outcome = "archived"
         else:
@@ -524,7 +524,7 @@ def finalize_trials(store) -> list[dict[str, Any]]:
                 exp_doc["status"] = "promoted"
                 store.save("experiments", exp_doc["id"], exp_doc)
             human = (
-                f"Trial passed: {inst.family} {inst.version} takes the helm after a clean "
+                f"Trial passed: {inst.family} {inst.version} takes over as champion after a clean "
                 f"{days}-day paper trial (no kill switch, no hard breaker)."
             )
             outcome = "promoted"

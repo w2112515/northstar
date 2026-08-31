@@ -1,9 +1,10 @@
 """Strategy catalog + runtime registry.
 
 Catalog = what users can see & pick (14 classics + AI analyst).
-Runtime = deterministic programs that emit TradeProposals. Nine families are
-runnable (wheel/CSP/CC, three defined-risk spreads, momentum, RSI reversion,
-MA cross); the rest are honestly labeled "coming soon" in the UI, never faked.
+Runtime = deterministic programs that emit TradeProposals. Ten families are
+runnable (wheel/CSP/CC, four defined-risk spreads incl. the bull call debit,
+momentum, RSI reversion, MA cross); the rest are honestly labeled "coming
+soon" in the UI, never faked.
 """
 
 from __future__ import annotations
@@ -35,8 +36,11 @@ CATALOG: list[dict[str, Any]] = [
      "default_params": {"underlyings": ["SPY", "QQQ"], "target_delta": 0.25, "width_pct": 0.03,
                          "trend_sma": 50, "dte_min": 21, "dte_max": 45, "min_credit_ratio": 0.15}},
     {"family": "bull_call_spread", "type": "bull_call_spread", "asset": "options", "risk": "medium",
-     "name": "Bull Call Debit Spread", "runnable": False,
-     "plain": "Pay a little to profit from a moderate rise - both gain and loss capped."},
+     "name": "Bull Call Debit Spread", "runnable": True,
+     "plain": "Pay a little to profit from a moderate rise - both gain and loss capped.",
+     "default_params": {"underlyings": ["SPY", "QQQ"], "long_delta": 0.55, "width_pct": 0.03,
+                         "trend_sma": 50, "min_trend": 0.02, "dte_min": 21, "dte_max": 45,
+                         "max_debit_ratio": 0.60}},
     {"family": "iron_condor", "type": "iron_condor", "asset": "options", "risk": "medium",
      "name": "Iron Condor", "runnable": True,
      "plain": "Bet on a quiet market: collect premium on both sides, losses capped.",
@@ -77,7 +81,7 @@ CATALOG: list[dict[str, Any]] = [
     {"family": "dsl_rotation", "type": "dsl_rotation", "asset": "stocks", "risk": "medium",
      "name": "Shipyard Rotation (DSL)", "runnable": True,
      "plain": "Strategies the system DESIGNED itself: a validated factor-blend spec, walk-forward "
-              "tested, deflated-Sharpe scored, and only sailing after your approval and a paper trial.",
+              "tested, deflated-Sharpe scored, and only trading after your approval and a paper trial.",
      "default_params": {}},
     # --- AI
     {"family": "ai_analyst", "type": "ai_analyst", "asset": "stocks", "risk": "medium",

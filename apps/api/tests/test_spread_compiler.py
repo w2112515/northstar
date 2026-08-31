@@ -80,6 +80,44 @@ def test_no_liquid_wing_refused():
         compile_vertical(spread_prop("bull_put_spread"), chain=puts_only_short)
 
 
+def test_risk_budget_sizes_contracts():
+    plan = compile_vertical(spread_prop("bull_put_spread", risk_budget=5000.0), chain=chain())
+    # per-contract max loss $1,650 -> a $5k budget affords 3 contracts
+    assert plan.meta["contracts"] == 3
+    assert plan.est_max_loss == pytest.approx(4950.0)
+    assert plan.est_credit_or_debit == pytest.approx(1050.0)
+    assert plan.meta["net_limit"] == pytest.approx(-3.5)      # per-spread price unchanged
+    assert all(l.qty == 1 for l in plan.legs)                 # ratio legs; qty rides meta.contracts
+
+
+def test_no_budget_keeps_legacy_single_contract():
+    plan = compile_vertical(spread_prop("bull_put_spread"), chain=chain())
+    assert plan.meta["contracts"] == 1
+
+
+def test_budget_below_one_contract_still_compiles_one():
+    # the compiler never drops a proposal - the gate owns the final rejection
+    plan = compile_vertical(spread_prop("bull_put_spread", risk_budget=500.0), chain=chain())
+    assert plan.meta["contracts"] == 1
+
+
+def test_budget_is_capped_at_max_contracts():
+    from northstar.compiler.options import MAX_CONTRACTS
+
+    plan = compile_vertical(spread_prop("bull_put_spread", risk_budget=1e9), chain=chain())
+    assert plan.meta["contracts"] == MAX_CONTRACTS
+
+
+def test_condor_budget_sizing():
+    plan = compile_iron_condor(
+        spread_prop("iron_condor", target_delta=0.20, risk_budget=3000.0), chain=chain()
+    )
+    # per-contract max loss $1,500 -> 2 contracts
+    assert plan.meta["contracts"] == 2
+    assert plan.est_max_loss == pytest.approx(3000.0)
+    assert plan.est_credit_or_debit == pytest.approx(1000.0)
+
+
 def test_iron_condor_combines_both_sides():
     plan = compile_iron_condor(spread_prop("iron_condor", target_delta=0.20), chain=chain())
     assert len(plan.legs) == 4

@@ -38,3 +38,8 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/[...path]">
   const { path } = await ctx.params;
   return proxy(req, path);
 }
+
+export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}

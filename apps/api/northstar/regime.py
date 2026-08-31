@@ -1,6 +1,6 @@
 """Market Compass: deterministic regime classification + conditional stats.
 
-The compass answers two questions the fleet keeps asking:
+The compass answers two questions the desk keeps asking:
   1. What kind of market is this?   (trend x volatility x breadth - pure math)
   2. Which crews historically earn their keep in THIS kind of market?
      (champion walk-forward OOS returns bucketed by historical regime)
@@ -151,7 +151,8 @@ def _hypothesis(regime: dict[str, Any], families: dict[str, Any], weather: dict 
     import json
 
     text = generate_text(
-        "You are the navigator of a paper-trading fleet. In 2-3 plain sentences, state a "
+        "You are the market analyst of NorthStar, a paper-trading autopilot. Never call the "
+        "system a fleet or ship and never call yourself a navigator or captain. In 2-3 plain sentences, state a "
         "market hypothesis STRICTLY from these computed facts (cite the regime and one "
         "conditional stat; include a confidence word like 'tentative' or 'firm' based on "
         f"streak length; never invent numbers):\n{json.dumps({'regime': regime, 'families': families, 'weather': (weather or {}).get('bucket')})}",

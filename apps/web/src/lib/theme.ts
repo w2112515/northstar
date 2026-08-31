@@ -8,7 +8,7 @@
  *  classes instead of importing this file. */
 
 export const CHART = {
-  // star-moment gold (token --gold): destination, sailed path, champion
+  // star-moment gold (token --gold): destination, traveled path, champion
   gold: "#f5c542",
   goldSoft: "rgba(245,197,66,0.55)",
   // money in (token --teal)
@@ -22,6 +22,9 @@ export const CHART = {
   signalSoft: "rgba(91,141,239,0.5)",
   // waiting on a human (token --amber)
   amber: "#f0a860",
+  // chart-only: derived-math overlays (moving averages). Not a UI token and
+  // not in globals.css on purpose - it must never appear outside a canvas.
+  violet: "#a78bfa",
   // neutrals
   ink: "#e7eef9",
   mist: "#a2b3d1",

@@ -90,14 +90,23 @@ export function TrajectoryHero({
         }.`
       : "Plan versus reality chart.";
 
+  // Explicit month ticks: recharts' auto ticks land on odd day counts and
+  // render as skipping months (+0/+2/+3/+5mo), which reads like a bug.
+  const tickStep = Math.max(1, Math.ceil(months / 6));
+  const monthTicks = [];
+  for (let m = 0; m <= months; m += tickStep) monthTicks.push(m * DAYS_PER_MONTH);
+
   return (
     <div className={className} role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height={260}>
-        <ComposedChart margin={{ top: 10, right: 12, bottom: 0, left: 0 }}>
+        {/* accessibilityLayer would add a focusable role="application" inside
+            this role="img" wrapper - a tab stop that reads axis noise. */}
+        <ComposedChart margin={{ top: 10, right: 12, bottom: 0, left: 0 }} accessibilityLayer={false}>
           <XAxis
             type="number"
             dataKey="d"
             domain={[0, maxD]}
+            ticks={monthTicks}
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={{ stroke: CHART.line }}
@@ -157,6 +166,10 @@ export function TrajectoryHero({
           {target != null && (
             <ReferenceLine
               y={target}
+              // Without extendDomain, recharts silently discards the line
+              // whenever the target sits outside the cone's data range - the
+              // red path then shows "0% odds" over a healthy-looking chart.
+              ifOverflow="extendDomain"
               stroke={CHART.gold}
               strokeDasharray="6 4"
               strokeWidth={1}
@@ -175,9 +188,11 @@ export function TrajectoryHero({
         </ComposedChart>
       </ResponsiveContainer>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-micro text-mist">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 bg-gold" /> actual equity
-        </span>
+        {actualRows.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 bg-gold" /> actual equity
+          </span>
+        )}
         {usableBands && (
           <>
             <span className="flex items-center gap-1.5">
@@ -232,12 +247,16 @@ export function ProbStrip({
 
   return (
     <div className="pt-1">
-      <div className="relative h-16">
-        <div className="absolute inset-x-0 top-6 h-px bg-line" />
+      {/* The above-row labels must live INSIDE this box. They used to hang
+          from a zero-height top-0 anchor via bottom-5, which pushed them out
+          of the container and into whatever rendered above (the chart
+          legend) - the worst-case "rough" label was unreadable. */}
+      <div className="relative h-20">
+        <div className="absolute inset-x-0 top-10 h-px bg-line" />
         {ticks.map((t) => (
-          <div key={t.label} className="absolute top-0" style={{ left: x(t.v) }}>
+          <div key={t.label} className="absolute inset-y-0" style={{ left: x(t.v) }}>
             {!t.below && (
-              <div className="absolute bottom-5 left-0 -translate-x-1/2 text-center">
+              <div className="absolute left-0 top-0 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
@@ -245,12 +264,12 @@ export function ProbStrip({
               </div>
             )}
             <div
-              className={`absolute left-0 top-6 w-px -translate-x-1/2 ${
+              className={`absolute left-0 top-10 w-px -translate-x-1/2 ${
                 t.strong ? "h-3.5 -translate-y-1 bg-ink" : "h-2.5 bg-mist/60"
               }`}
             />
             {t.below && (
-              <div className="absolute left-0 top-8 -translate-x-1/2 text-center">
+              <div className="absolute left-0 top-12 -translate-x-1/2 text-center">
                 <div className="whitespace-nowrap font-mono text-micro tabular-nums text-ink">
                   {fmtUsd(t.v, 0)}
                 </div>
@@ -260,9 +279,9 @@ export function ProbStrip({
           </div>
         ))}
         {target != null && (
-          <div className="absolute top-0 -translate-x-1/2" style={{ left: x(target) }}>
+          <div className="absolute top-4 -translate-x-1/2" style={{ left: x(target) }}>
             <div className="text-center font-mono text-micro font-semibold text-gold">✦</div>
-            <div className="h-3 w-px translate-y-2.5 bg-gold" />
+            <div className="mx-auto h-3 w-px translate-y-1 bg-gold" />
           </div>
         )}
       </div>
