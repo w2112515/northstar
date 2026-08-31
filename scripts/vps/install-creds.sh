@@ -20,6 +20,11 @@ chmod 700 /etc/northstar "$CRED_DIR"
 for key in $KEYS; do
   file="$CRED_DIR/$(echo "$key" | tr '[:upper:]' '[:lower:]')"
   val=$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r' || true)
+  if [ -z "$val" ] && [ -s "$file" ]; then
+    echo "kept $file (already populated; .env has no $key)"
+    chmod 600 "$file"
+    continue
+  fi
   printf '%s' "$val" > "$file"
   chmod 600 "$file"
   if [ -n "$val" ]; then

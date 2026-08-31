@@ -1,6 +1,6 @@
 # NorthStar - Performance Tearsheet (paper account)
 
-Generated 2026-08-29T20:06:47.485611+00:00 - equity source: `alpaca_portfolio_history`.
+Generated 2026-08-31T17:52:44.678198+00:00 - equity source: `none`.
 
 All results are from an Alpaca **paper** account. Past results never promise
 future returns; realized-P&L rows marked *estimated* were inferred from option
@@ -8,25 +8,30 @@ expiry/assignment (no fill existed to price them exactly).
 
 ## Equity curve
 
-`▁▁█`
-
-2026-08-27 ($100,000) to 2026-08-29 ($100,045)
-
-| Metric | Value |
-| --- | --- |
-| Total return | +0.05% |
-| Annualized return | - |
-| Sharpe (daily, annualized) | - |
-| Max drawdown | 0.00% |
-| Daily win rate | 50% |
-| Best / worst day | +0.05% / +0.00% |
-| Trading days | 2 |
-
-> annualized stats appear after 20 trading days (have 2)
+> No daily equity history yet - the nightly job
+> records one point per day, and Alpaca needs a few sessions of activity.
 
 ## Realized P&L by strategy
 
-> No closed round-trips yet - realized P&L appears once positions close.
+| Strategy family | Trades | Wins | Losses | Realized $ | Estimated entries |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| momentum_rotation | 4 | 2 | 2 | -26.22 | 0 |
+
+**Total realized: -26.22 USD** (paper).
+
+## Slippage sensitivity (walk-forward, out-of-sample)
+
+Same backtest under three fill assumptions - an edge that only survives
+mid-price fills is a liquidity subsidy, not a strategy.
+
+**momentum_rotation** (champion params)
+
+| Fill assumption | Cost (bps) | OOS ann. return | OOS Sharpe | OOS max DD |
+| --- | ---: | ---: | ---: | ---: |
+| mid | 1 | +51.2% | 1.57 | -26.6% |
+| quarter spread | 5 | +49.9% | 1.54 | -26.7% |
+| half spread | 9 | +48.7% | 1.50 | -26.8% |
+
 
 ## Method notes
 
